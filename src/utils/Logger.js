@@ -1,0 +1,384 @@
+/**
+ * Logger - Professional Logging Utility
+ * 
+ * Provides structured logging with different levels, timestamps, and formatting
+ * for the Secure Mesh CLI application.
+ * 
+ * @author Benjamin Morin
+ * @version 1.0.0
+ */
+
+import chalk from 'chalk';
+
+export class Logger {
+  constructor(options = {}) {
+    this.level = options.level || 'info';
+    this.timestamp = options.timestamp !== false;
+    this.colors = options.colors !== false;
+    this.prefix = options.prefix || 'MESH';
+        
+    this.levels = {
+      error: 0,
+      warn: 1,
+      info: 2,
+      success: 2,
+      debug: 3,
+      trace: 4
+    };
+  }
+
+  /**
+     * Log error message
+     * Critical errors that prevent normal operation
+     */
+  error(message, ...args) {
+    this.log('error', message, args);
+  }
+
+  /**
+     * Log warning message
+     * Non-critical issues that should be addressed
+     */
+  warn(message, ...args) {
+    this.log('warn', message, args);
+  }
+
+  /**
+     * Log info message
+     * General information about application state
+     */
+  info(message, ...args) {
+    this.log('info', message, args);
+  }
+
+  /**
+     * Log success message
+     * Successful operations and positive outcomes
+     */
+  success(message, ...args) {
+    this.log('success', message, args);
+  }
+
+  /**
+     * Log debug message
+     * Detailed debugging information
+     */
+  debug(message, ...args) {
+    this.log('debug', message, args);
+  }
+
+  /**
+     * Log trace message
+     * Very detailed execution tracing
+     */
+  trace(message, ...args) {
+    this.log('trace', message, args);
+  }
+
+  /**
+     * Core logging method
+     * Handles message formatting and output
+     */
+  log(level, message, args = []) {
+    // Check if this log level should be displayed
+    if (this.levels[level] > this.levels[this.level]) {
+      return;
+    }
+
+    const timestamp = this.timestamp ? this.getTimestamp() : '';
+    const prefix = this.prefix ? `[${this.prefix}]` : '';
+    const levelStr = this.getLevelString(level);
+        
+    let formattedMessage = this.formatMessage(level, message, timestamp, prefix, levelStr);
+        
+    // Add additional arguments
+    if (args.length > 0) {
+      formattedMessage += ` ${  args.map(arg => 
+        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+      ).join(' ')}`;
+    }
+        
+    // Output to appropriate stream
+    if (level === 'error') {
+      console.error(formattedMessage);
+    } else {
+      console.log(formattedMessage);
+    }
+  }
+
+  /**
+     * Format message with appropriate styling
+     */
+  formatMessage(level, message, timestamp, prefix, levelStr) {
+    let formatted = '';
+        
+    if (this.colors) {
+      // Add timestamp
+      if (timestamp) {
+        formatted += `${chalk.gray(timestamp)  } `;
+      }
+            
+      // Add prefix
+      if (prefix) {
+        formatted += `${chalk.blue(prefix)  } `;
+      }
+            
+      // Add level indicator
+      formatted += `${levelStr  } `;
+            
+      // Add message with appropriate color
+      switch (level) {
+      case 'error':
+        formatted += chalk.red(message);
+        break;
+      case 'warn':
+        formatted += chalk.yellow(message);
+        break;
+      case 'info':
+        formatted += chalk.blue(message);
+        break;
+      case 'success':
+        formatted += chalk.green(message);
+        break;
+      case 'debug':
+        formatted += chalk.cyan(message);
+        break;
+      case 'trace':
+        formatted += chalk.magenta(message);
+        break;
+      default:
+        formatted += message;
+      }
+    } else {
+      // No colors - plain text format
+      if (timestamp) formatted += `${timestamp  } `;
+      if (prefix) formatted += `${prefix  } `;
+      formatted += `${levelStr  } ${  message}`;
+    }
+        
+    return formatted;
+  }
+
+  /**
+     * Get formatted timestamp
+     */
+  getTimestamp() {
+    const now = new Date();
+    return now.toISOString();
+  }
+
+  /**
+     * Get formatted level string
+     */
+  getLevelString(level) {
+    if (this.colors) {
+      switch (level) {
+      case 'error':
+        return chalk.red.bold('ERROR');
+      case 'warn':
+        return chalk.yellow.bold('WARN ');
+      case 'info':
+        return chalk.blue.bold('INFO ');
+      case 'success':
+        return chalk.green.bold('SUCCESS');
+      case 'debug':
+        return chalk.cyan.bold('DEBUG');
+      case 'trace':
+        return chalk.magenta.bold('TRACE');
+      default:
+        return chalk.gray.bold(level.toUpperCase().padEnd(5));
+      }
+    } else {
+      return `[${level.toUpperCase().padEnd(5)}]`;
+    }
+  }
+
+  /**
+     * Set log level
+     */
+  setLevel(level) {
+    if (this.levels.hasOwnProperty(level)) {
+      this.level = level;
+      this.info(`Log level set to: ${level}`);
+    } else {
+      this.warn(`Invalid log level: ${level}. Valid levels: ${Object.keys(this.levels).join(', ')}`);
+    }
+  }
+
+  /**
+     * Enable/disable timestamps
+     */
+  setTimestamp(enabled) {
+    this.timestamp = enabled;
+  }
+
+  /**
+     * Enable/disable colors
+     */
+  setColors(enabled) {
+    this.colors = enabled;
+  }
+
+  /**
+     * Set prefix
+     */
+  setPrefix(prefix) {
+    this.prefix = prefix;
+  }
+
+  /**
+     * Create a child logger with specific prefix
+     */
+  child(prefix) {
+    return new Logger({
+      level: this.level,
+      timestamp: this.timestamp,
+      colors: this.colors,
+      prefix: `${this.prefix}:${prefix}`
+    });
+  }
+
+  /**
+     * Log security event
+     * Special method for security-related logging
+     */
+  security(event, details = {}) {
+    const securityMessage = `SECURITY: ${event}`;
+    this.warn(securityMessage, details);
+        
+    // Additional security logging could be implemented here
+    // such as writing to security log files, sending alerts, etc.
+  }
+
+  /**
+     * Log performance metric
+     * Special method for performance-related logging
+     */
+  performance(operation, duration, metadata = {}) {
+    const perfMessage = `PERFORMANCE: ${operation} took ${duration}ms`;
+    this.debug(perfMessage, metadata);
+  }
+
+  /**
+     * Log network event
+     * Special method for network-related logging
+     */
+  network(event, details = {}) {
+    const networkMessage = `NETWORK: ${event}`;
+    this.info(networkMessage, details);
+  }
+
+  /**
+     * Log cryptographic operation
+     * Special method for crypto-related logging
+     */
+  crypto(operation, details = {}) {
+    const cryptoMessage = `CRYPTO: ${operation}`;
+    this.debug(cryptoMessage, details);
+  }
+
+  /**
+     * Create a progress logger
+     * Useful for long-running operations
+     */
+  createProgress(description, total = 100) {
+    return {
+      description,
+      total,
+      current: 0,
+      startTime: Date.now(),
+            
+      update: (current, message = '') => {
+        this.current = current;
+        const percentage = Math.round((current / total) * 100);
+        const elapsed = Date.now() - this.startTime;
+        const eta = current > 0 ? Math.round((elapsed / current) * (total - current)) : 0;
+                
+        this.info(`${description}: ${percentage}% (${current}/${total}) - ${message} - ETA: ${eta}ms`);
+      },
+            
+      complete: (message = '') => {
+        const elapsed = Date.now() - this.startTime;
+        this.success(`${description}: Completed in ${elapsed}ms - ${message}`);
+      },
+            
+      error: (message = '') => {
+        this.error(`${description}: Failed - ${message}`);
+      }
+    };
+  }
+
+  /**
+     * Log table data
+     * Useful for displaying structured data
+     */
+  table(data, title = '') {
+    if (title) {
+      this.info(title);
+    }
+        
+    if (Array.isArray(data) && data.length > 0) {
+      // Find the longest value in each column for padding
+      const columns = Object.keys(data[0]);
+      const maxLengths = columns.map(col => {
+        return Math.max(
+          col.length,
+          ...data.map(row => String(row[col] || '').length)
+        );
+      });
+            
+      // Print header
+      const header = columns.map((col, i) => col.padEnd(maxLengths[i])).join(' | ');
+      this.info(header);
+      this.info('-'.repeat(header.length));
+            
+      // Print rows
+      data.forEach(row => {
+        const rowStr = columns.map((col, i) => 
+          String(row[col] || '').padEnd(maxLengths[i])
+        ).join(' | ');
+        this.info(rowStr);
+      });
+    } else {
+      this.info('No data to display');
+    }
+  }
+
+  /**
+     * Log JSON data
+     * Useful for debugging complex objects
+     */
+  json(data, title = '') {
+    if (title) {
+      this.info(title);
+    }
+        
+    try {
+      const jsonStr = JSON.stringify(data, null, 2);
+      this.info(jsonStr);
+    } catch (error) {
+      this.error('Failed to stringify JSON data:', error.message);
+    }
+  }
+
+  /**
+     * Get current log level
+     */
+  getLevel() {
+    return this.level;
+  }
+
+  /**
+     * Check if a log level is enabled
+     */
+  isLevelEnabled(level) {
+    return this.levels[level] <= this.levels[this.level];
+  }
+
+  /**
+     * Get all available log levels
+     */
+  getAvailableLevels() {
+    return Object.keys(this.levels);
+  }
+}

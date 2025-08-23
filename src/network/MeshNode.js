@@ -1,0 +1,782 @@
+/**
+ * MeshNode - Individual Node in Mesh Network
+ * 
+ * Represents a single node in the mesh network simulation with its own
+ * identity, connections, and communication capabilities.
+ * 
+ * @author Benjamin Morin
+ * @version 1.0.0
+ */
+
+import { Logger } from '../utils/Logger.js';
+import { v4 as uuidv4 } from 'uuid';
+
+export class MeshNode {
+  constructor(name, type, identity, capabilities, meshNetwork) {
+    this.id = uuidv4();
+    this.name = name;
+    this.type = type;
+    this.identity = identity;
+    this.capabilities = capabilities;
+    this.meshNetwork = meshNetwork;
+    this.logger = new Logger().child(`NODE:${name}`);
+        
+    // Node state
+    this.status = 'active';
+    this.createdAt = new Date();
+    this.lastSeen = new Date();
+    this.uptime = 0;
+        
+    // Connections
+    this.connections = new Map();
+    this.incomingConnections = new Map();
+    this.outgoingConnections = new Map();
+        
+    // Message handling
+    this.messageQueue = [];
+    this.processedMessages = [];
+    this.messageStats = {
+      sent: 0,
+      received: 0,
+      dropped: 0,
+      errors: 0
+    };
+        
+    // Security state
+    this.securityViolations = 0;
+    this.lastSecurityCheck = new Date();
+    this.trustScore = 100;
+        
+    // Performance metrics
+    this.performanceMetrics = {
+      responseTime: 0,
+      throughput: 0,
+      errorRate: 0,
+      lastUpdated: new Date()
+    };
+        
+    this.logger.info(`Node created: ${name} (${type})`);
+  }
+
+  /**
+     * Initialize the node
+     * Sets up node capabilities and validates configuration
+     */
+  async initialize() {
+    try {
+      this.logger.info('Initializing node...');
+            
+      // Validate identity
+      if (!this.identity || !this.identity.certificate) {
+        throw new Error('Node identity not properly configured');
+      }
+            
+      // Setup capabilities
+      await this.setupCapabilities();
+            
+      // Initialize message processing
+      this.initializeMessageProcessing();
+            
+      // Start heartbeat
+      this.startHeartbeat();
+            
+      this.logger.success('Node initialized successfully');
+            
+    } catch (error) {
+      this.logger.error('Node initialization failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+     * Setup node capabilities
+     * Configures node-specific features and limitations
+     */
+  async setupCapabilities() {
+    this.logger.debug('Setting up node capabilities...');
+        
+    // Default capabilities
+    const defaultCapabilities = {
+      routing: false,
+      gateway: false,
+      storage: false,
+      processing: true,
+      encryption: true,
+      discovery: true
+    };
+        
+    // Merge with provided capabilities
+    this.capabilities = { ...defaultCapabilities, ...this.capabilities };
+        
+    // Validate capabilities
+    if (this.type === 'router' && !this.capabilities.routing) {
+      this.capabilities.routing = true;
+    }
+        
+    if (this.type === 'gateway' && !this.capabilities.gateway) {
+      this.capabilities.gateway = true;
+      this.capabilities.routing = true; // Gateways can route messages
+    }
+        
+    this.logger.debug(`Capabilities configured: ${Object.keys(this.capabilities).join(', ')}`);
+  }
+
+  /**
+     * Initialize message processing
+     * Sets up message handling infrastructure
+     */
+  initializeMessageProcessing() {
+    this.logger.debug('Initializing message processing...');
+        
+    // Start message processor
+    this.messageProcessor = setInterval(() => {
+      this.processMessageQueue();
+    }, 100); // Process messages every 100ms
+        
+    this.logger.debug('Message processing initialized');
+  }
+
+  /**
+     * Start heartbeat mechanism
+     * Maintains node presence in the network
+     */
+  startHeartbeat() {
+    this.logger.debug('Starting heartbeat...');
+        
+    this.heartbeat = setInterval(() => {
+      this.sendHeartbeat();
+    }, 5000); // Send heartbeat every 5 seconds
+        
+    this.logger.debug('Heartbeat started');
+  }
+
+  /**
+     * Send heartbeat to connected peers
+     * Announces node presence and health
+     */
+  async sendHeartbeat() {
+    try {
+      const heartbeat = {
+        type: 'heartbeat',
+        nodeId: this.id,
+        nodeName: this.name,
+        timestamp: new Date().toISOString(),
+        status: this.status,
+        uptime: this.uptime,
+        trustScore: this.trustScore
+      };
+            
+      // Send to all connected peers
+      for (const [peerId, connection] of this.connections) {
+        try {
+          await this.sendMessage(peerId, heartbeat);
+        } catch (error) {
+          this.logger.warn(`Failed to send heartbeat to ${peerId}:`, error.message);
+        }
+      }
+            
+      this.lastSeen = new Date();
+      this.uptime = Date.now() - this.createdAt.getTime();
+            
+    } catch (error) {
+      this.logger.error('Heartbeat failed:', error.message);
+    }
+  }
+
+  /**
+     * Connect to another node
+     * Establishes secure connection with peer node
+     */
+  async connectToNode(targetNode, connectionType = 'secure') {
+    try {
+      this.logger.info(`Connecting to node: ${targetNode.name}`);
+            
+      // Check if already connected
+      if (this.connections.has(targetNode.id)) {
+        this.logger.warn(`Already connected to ${targetNode.name}`);
+        return this.connections.get(targetNode.id);
+      }
+            
+      // Establish connection through mesh network
+      const connection = await this.meshNetwork.establishConnection(
+        this, 
+        targetNode, 
+        connectionType
+      );
+            
+      // Store connection
+      this.connections.set(targetNode.id, connection);
+      this.outgoingConnections.set(targetNode.id, connection);
+            
+      this.logger.success(`Connected to ${targetNode.name}`);
+      return connection;
+            
+    } catch (error) {
+      this.logger.error(`Failed to connect to ${targetNode.name}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+     * Accept connection from another node
+     * Handles incoming connection requests
+     */
+  async acceptConnection(sourceNode, connection) {
+    try {
+      this.logger.info(`Accepting connection from: ${sourceNode.name}`);
+            
+      // Store incoming connection
+      this.connections.set(sourceNode.id, connection);
+      this.incomingConnections.set(sourceNode.id, connection);
+            
+      this.logger.success(`Connection accepted from ${sourceNode.name}`);
+            
+    } catch (error) {
+      this.logger.error(`Failed to accept connection from ${sourceNode.name}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+     * Disconnect from a specific node
+     * Closes connection and cleans up resources
+     */
+  async disconnectFromNode(nodeId) {
+    try {
+      const connection = this.connections.get(nodeId);
+      if (!connection) {
+        this.logger.warn(`No connection found to node: ${nodeId}`);
+        return;
+      }
+            
+      this.logger.info(`Disconnecting from node: ${nodeId}`);
+            
+      // Remove from connection maps
+      this.connections.delete(nodeId);
+      this.incomingConnections.delete(nodeId);
+      this.outgoingConnections.delete(nodeId);
+            
+      // Notify mesh network
+      await this.meshNetwork.topologyManager.removeConnection(connection.id);
+            
+      this.logger.success(`Disconnected from node: ${nodeId}`);
+            
+    } catch (error) {
+      this.logger.error(`Failed to disconnect from ${nodeId}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+     * Disconnect from all nodes
+     * Closes all connections and cleans up
+     */
+  async disconnectFromAll() {
+    this.logger.info('Disconnecting from all nodes...');
+        
+    const disconnectPromises = [];
+        
+    for (const [nodeId, connection] of this.connections) {
+      disconnectPromises.push(this.disconnectFromNode(nodeId));
+    }
+        
+    try {
+      await Promise.all(disconnectPromises);
+      this.logger.success('Disconnected from all nodes');
+    } catch (error) {
+      this.logger.error('Some disconnections failed:', error.message);
+    }
+  }
+
+  /**
+     * Send message to another node
+     * Encrypts and sends message through secure connection
+     */
+  async sendMessage(targetNodeId, message) {
+    try {
+      const connection = this.connections.get(targetNodeId);
+      if (!connection) {
+        throw new Error(`No connection to node: ${targetNodeId}`);
+      }
+            
+      // Add message metadata
+      const enrichedMessage = {
+        ...message,
+        sourceNode: this.name,
+        sourceNodeId: this.id,
+        messageId: uuidv4(),
+        timestamp: new Date().toISOString(),
+        sequence: this.messageStats.sent + 1
+      };
+            
+      // Send through mesh network
+      const targetNode = this.meshNetwork.nodes.get(targetNodeId);
+      if (!targetNode) {
+        throw new Error(`Target node not found: ${targetNodeId}`);
+      }
+            
+      await this.meshNetwork.sendMessage(this, targetNode, enrichedMessage);
+            
+      // Update statistics
+      this.messageStats.sent++;
+      this.performanceMetrics.lastUpdated = new Date();
+            
+      this.logger.debug(`Message sent to ${targetNodeId}: ${message.type}`);
+      return enrichedMessage;
+            
+    } catch (error) {
+      this.logger.error(`Failed to send message to ${targetNodeId}:`, error.message);
+      this.messageStats.errors++;
+      throw error;
+    }
+  }
+
+  /**
+     * Receive message from another node
+     * Processes incoming encrypted messages
+     */
+  async receiveMessage(message) {
+    try {
+      this.logger.debug(`Received message from ${message.sourceNode}: ${message.type}`);
+            
+      // Validate message
+      if (!this.validateMessage(message)) {
+        this.logger.warn(`Invalid message received from ${message.sourceNode}`);
+        this.messageStats.dropped++;
+        return;
+      }
+            
+      // Add to message queue
+      this.messageQueue.push({
+        ...message,
+        receivedAt: new Date()
+      });
+            
+      // Update statistics
+      this.messageStats.received++;
+      this.lastSeen = new Date();
+            
+      // Process message if queue is getting long
+      if (this.messageQueue.length > 100) {
+        this.processMessageQueue();
+      }
+            
+    } catch (error) {
+      this.logger.error('Message reception failed:', error.message);
+      this.messageStats.errors++;
+    }
+  }
+
+  /**
+     * Validate incoming message
+     * Checks message integrity and authenticity
+     */
+  validateMessage(message) {
+    try {
+      // Check required fields - use 'id' instead of 'messageId'
+      if (!message.sourceNode || !message.timestamp || !message.id) {
+        return false;
+      }
+            
+      // Check timestamp (reject messages older than 5 minutes)
+      const messageTime = new Date(message.timestamp);
+      const now = new Date();
+      if (now - messageTime > 300000) { // 5 minutes
+        return false;
+      }
+            
+      // Check if source node exists
+      const sourceNode = this.meshNetwork.nodes.get(message.sourceNode);
+      if (!sourceNode) {
+        return false;
+      }
+      
+      // For routed messages, we don't need to check direct connections
+      // The message router handles the routing logic
+            
+      return true;
+            
+    } catch (error) {
+      this.logger.error('Message validation failed:', error.message);
+      return false;
+    }
+  }
+
+  /**
+     * Process message queue
+     * Handles queued messages based on type
+     */
+  async processMessageQueue() {
+    if (this.messageQueue.length === 0) {
+      return;
+    }
+        
+    const messages = this.messageQueue.splice(0, 10); // Process up to 10 messages
+        
+    for (const message of messages) {
+      try {
+        await this.handleMessage(message);
+        this.processedMessages.push(message);
+      } catch (error) {
+        this.logger.error('Failed to process message:', error.message);
+        this.messageStats.errors++;
+      }
+    }
+  }
+
+  /**
+     * Handle specific message types
+     * Routes messages to appropriate handlers
+     */
+  async handleMessage(message) {
+    try {
+      switch (message.type) {
+      case 'heartbeat':
+        await this.handleHeartbeat(message);
+        break;
+      case 'data':
+        await this.handleDataMessage(message);
+        break;
+      case 'key_exchange':
+        await this.handleKeyExchange(message);
+        break;
+      case 'discovery':
+        await this.handleDiscoveryMessage(message);
+        break;
+      case 'security_alert':
+        await this.handleSecurityAlert(message);
+        break;
+      default:
+        this.logger.warn(`Unknown message type: ${message.type}`);
+      }
+    } catch (error) {
+      this.logger.error(`Message handling failed for type ${message.type}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+     * Handle heartbeat message
+     * Updates peer status and health information
+     */
+  async handleHeartbeat(message) {
+    try {
+      // Update peer information
+      const peerNode = this.meshNetwork.nodes.get(message.sourceNode);
+      if (peerNode) {
+        peerNode.lastSeen = new Date(message.timestamp);
+        peerNode.status = message.status;
+        peerNode.trustScore = message.trustScore;
+      }
+            
+      // Send heartbeat response
+      const response = {
+        type: 'heartbeat_ack',
+        nodeId: this.id,
+        nodeName: this.name,
+        timestamp: new Date().toISOString(),
+        status: this.status,
+        uptime: this.uptime
+      };
+            
+      await this.sendMessage(message.sourceNode, response);
+            
+    } catch (error) {
+      this.logger.error('Heartbeat handling failed:', error.message);
+    }
+  }
+
+  /**
+     * Handle data message
+     * Processes application data messages
+     */
+  async handleDataMessage(message) {
+    try {
+      this.logger.debug(`Processing data message: ${message.content?.substring(0, 50)}...`);
+            
+      // Process message content based on capabilities
+      if (this.capabilities.processing) {
+        // Simulate message processing
+        await this.simulateProcessing(message);
+      }
+            
+      // Forward message if routing capability
+      if (this.capabilities.routing && message.forward) {
+        await this.forwardMessage(message);
+      }
+            
+    } catch (error) {
+      this.logger.error('Data message handling failed:', error.message);
+    }
+  }
+
+  /**
+     * Handle key exchange message
+     * Processes cryptographic key exchange
+     */
+  async handleKeyExchange(message) {
+    try {
+      this.logger.debug('Processing key exchange message');
+            
+      // Validate key exchange message
+      if (!message.encryptedKey || !message.signature) {
+        throw new Error('Invalid key exchange message format');
+      }
+            
+      // Process key exchange through security core
+      // This would typically involve decrypting the session key
+      // and updating the connection's cryptographic state
+            
+      this.logger.debug('Key exchange completed');
+            
+    } catch (error) {
+      this.logger.error('Key exchange handling failed:', error.message);
+    }
+  }
+
+  /**
+     * Handle discovery message
+     * Processes network discovery requests
+     */
+  async handleDiscoveryMessage(message) {
+    try {
+      this.logger.debug('Processing discovery message');
+            
+      // Respond with node information
+      const discoveryResponse = {
+        type: 'discovery_response',
+        nodeId: this.id,
+        nodeName: this.name,
+        nodeType: this.type,
+        capabilities: this.capabilities,
+        status: this.status,
+        trustScore: this.trustScore,
+        connections: this.connections.size
+      };
+            
+      await this.sendMessage(message.sourceNode, discoveryResponse);
+            
+    } catch (error) {
+      this.logger.error('Discovery message handling failed:', error.message);
+    }
+  }
+
+  /**
+     * Handle security alert
+     * Processes security-related notifications
+     */
+  async handleSecurityAlert(message) {
+    try {
+      this.logger.warn(`Security alert received: ${message.alert}`);
+            
+      // Update security metrics
+      this.securityViolations++;
+      this.lastSecurityCheck = new Date();
+            
+      // Adjust trust score
+      if (message.severity === 'high') {
+        this.trustScore = Math.max(0, this.trustScore - 20);
+      } else if (message.severity === 'medium') {
+        this.trustScore = Math.max(0, this.trustScore - 10);
+      } else {
+        this.trustScore = Math.max(0, this.trustScore - 5);
+      }
+            
+      // Log security event
+      this.logger.security('Security alert processed', {
+        alert: message.alert,
+        severity: message.severity,
+        newTrustScore: this.trustScore
+      });
+            
+    } catch (error) {
+      this.logger.error('Security alert handling failed:', error.message);
+    }
+  }
+
+  /**
+     * Simulate message processing
+     * Simulates computational work for messages
+     */
+  async simulateProcessing(message) {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        // Simulate processing time
+        const processingTime = Math.random() * 100 + 10; // 10-110ms
+        this.performanceMetrics.responseTime = processingTime;
+        resolve();
+      }, Math.random() * 50);
+    });
+  }
+
+  /**
+     * Forward message to other nodes
+     * Routes messages through the network
+     */
+  async forwardMessage(message) {
+    try {
+      // Find next hop based on routing table
+      const nextHop = this.findNextHop(message.targetNode);
+      if (nextHop) {
+        await this.sendMessage(nextHop, message);
+        this.logger.debug(`Message forwarded to ${nextHop}`);
+      }
+    } catch (error) {
+      this.logger.error('Message forwarding failed:', error.message);
+    }
+  }
+
+  /**
+     * Find next hop for routing
+     * Determines optimal path to destination
+     */
+  findNextHop(targetNode) {
+    // Simple routing implementation
+    // In a real implementation, this would use routing tables
+    for (const [nodeId, connection] of this.connections) {
+      if (nodeId === targetNode) {
+        return nodeId;
+      }
+    }
+        
+    // Return first available connection as fallback
+    const firstConnection = Array.from(this.connections.keys())[0];
+    return firstConnection;
+  }
+
+  /**
+     * Get node information
+     * Returns public node details
+     */
+  getNodeInfo() {
+    return {
+      id: this.id,
+      name: this.name,
+      type: this.type,
+      status: this.status,
+      capabilities: this.capabilities,
+      createdAt: this.createdAt,
+      lastSeen: this.lastSeen,
+      uptime: this.uptime,
+      connections: this.connections.size,
+      trustScore: this.trustScore,
+      messageStats: { ...this.messageStats },
+      performanceMetrics: { ...this.performanceMetrics }
+    };
+  }
+
+  /**
+     * Get connection information
+     * Returns details about node connections
+     */
+  getConnectionInfo() {
+    const connections = [];
+        
+    for (const [nodeId, connection] of this.connections) {
+      const peerNode = this.meshNetwork.nodes.get(nodeId);
+      connections.push({
+        peerId: nodeId,
+        peerName: peerNode ? peerNode.name : 'Unknown',
+        connectionType: connection.type,
+        establishedAt: connection.establishedAt,
+        lastActivity: connection.lastActivity,
+        messageCount: connection.messageCount,
+        securityLevel: connection.securityLevel
+      });
+    }
+        
+    return connections;
+  }
+
+  /**
+     * Update performance metrics
+     * Calculates and updates performance statistics
+     */
+  updatePerformanceMetrics() {
+    try {
+      // Calculate error rate
+      const totalMessages = this.messageStats.sent + this.messageStats.received;
+      this.performanceMetrics.errorRate = totalMessages > 0 ? 
+        (this.messageStats.errors / totalMessages) * 100 : 0;
+            
+      // Calculate throughput (messages per second)
+      const timeWindow = 60000; // 1 minute
+      const recentMessages = this.processedMessages.filter(msg => 
+        Date.now() - msg.receivedAt.getTime() < timeWindow
+      );
+      this.performanceMetrics.throughput = recentMessages.length / (timeWindow / 1000);
+            
+      this.performanceMetrics.lastUpdated = new Date();
+            
+    } catch (error) {
+      this.logger.error('Performance metrics update failed:', error.message);
+    }
+  }
+
+  /**
+     * Perform security check
+     * Validates node security posture
+     */
+  async performSecurityCheck() {
+    try {
+      this.logger.debug('Performing security check...');
+            
+      // Check certificate validity
+      const certValid = await this.meshNetwork.securityCore.validateCertificate(
+        this.identity.certificate
+      );
+            
+      if (!certValid) {
+        this.securityViolations++;
+        this.trustScore = Math.max(0, this.trustScore - 30);
+        this.logger.warn('Certificate validation failed');
+      }
+            
+      // Check for suspicious activity
+      if (this.messageStats.errors > this.messageStats.sent * 0.1) {
+        this.securityViolations++;
+        this.trustScore = Math.max(0, this.trustScore - 15);
+        this.logger.warn('High error rate detected');
+      }
+            
+      this.lastSecurityCheck = new Date();
+            
+      this.logger.debug(`Security check completed. Trust score: ${this.trustScore}`);
+            
+    } catch (error) {
+      this.logger.error('Security check failed:', error.message);
+    }
+  }
+
+  /**
+     * Shutdown node
+     * Cleans up resources and disconnects
+     */
+  async shutdown() {
+    try {
+      this.logger.info('Shutting down node...');
+            
+      // Stop message processing
+      if (this.messageProcessor) {
+        clearInterval(this.messageProcessor);
+      }
+            
+      // Stop heartbeat
+      if (this.heartbeat) {
+        clearInterval(this.heartbeat);
+      }
+            
+      // Disconnect from all peers
+      await this.disconnectFromAll();
+            
+      // Update status
+      this.status = 'shutdown';
+            
+      this.logger.success('Node shutdown complete');
+            
+    } catch (error) {
+      this.logger.error('Node shutdown failed:', error.message);
+      throw error;
+    }
+  }
+}

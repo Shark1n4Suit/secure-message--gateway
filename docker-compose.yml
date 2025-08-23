@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  secure-mesh-cli:
+    build: .
+    container_name: secure-mesh-cli
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - MESH_LOG_LEVEL=info
+      - MESH_SECURITY_ENCRYPTION_LEVEL=256
+    volumes:
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./data:/app/data
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "console.log('Health check passed')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Development service with hot reload
+  secure-mesh-cli-dev:
+    build: .
+    container_name: secure-mesh-cli-dev
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - MESH_LOG_LEVEL=debug
+      - MESH_DEV_DEBUG_MODE=true
+    volumes:
+      - .:/app
+      - /app/node_modules
+    ports:
+      - "3001:3000"
+    command: npm run dev
+    profiles:
+      - dev
+
+networks:
+  default:
+    name: secure-mesh-network

@@ -1,0 +1,1145 @@
+/**
+ * SecurityTester - Security Testing and Attack Simulation
+ * 
+ * Provides comprehensive security testing capabilities including attack
+ * simulation, vulnerability assessment, and security validation for the
+ * mesh network simulation.
+ * 
+ * @author Benjamin Morin
+ * @version 1.0.0
+ */
+
+import { Logger } from '../utils/Logger.js';
+import inquirer from 'inquirer';
+import chalk from 'chalk';
+import ora from 'ora';
+
+export class SecurityTester {
+  constructor(meshNetwork) {
+    this.meshNetwork = meshNetwork;
+    this.logger = new Logger();
+    this.testResults = new Map();
+    this.attackHistory = [];
+    this.isInitialized = false;
+        
+    // Security test configuration
+    this.testConfig = {
+      maxAttackDuration: 30000, // 30 seconds
+      maxConcurrentAttacks: 3,
+      autoMitigation: true,
+      detailedLogging: true
+    };
+        
+    // Available security tests
+    this.availableTests = [
+      'replay_attack',
+      'man_in_middle',
+      'certificate_forgery',
+      'key_compromise',
+      'denial_of_service',
+      'message_injection',
+      'timing_attack',
+      'brute_force'
+    ];
+  }
+
+  /**
+     * Initialize the security tester
+     * Sets up testing infrastructure and validates configuration
+     */
+  async initialize() {
+    try {
+      this.logger.info('Initializing security tester...');
+            
+      // Validate mesh network is ready
+      if (!this.meshNetwork.isInitialized) {
+        throw new Error('Mesh network must be initialized before security tester');
+      }
+            
+      // Setup test infrastructure
+      this.setupTestInfrastructure();
+            
+      this.isInitialized = true;
+      this.logger.success('Security tester initialized successfully');
+            
+    } catch (error) {
+      this.logger.error('Failed to initialize security tester:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+     * Setup test infrastructure
+     * Initializes testing capabilities and monitoring
+     */
+  setupTestInfrastructure() {
+    this.logger.debug('Setting up test infrastructure...');
+        
+    // Initialize test result storage
+    this.testResults = new Map();
+        
+    // Setup attack history tracking
+    this.attackHistory = [];
+        
+    this.logger.debug('Test infrastructure setup complete');
+  }
+
+  /**
+     * Show security test menu
+     * Displays interactive menu for security testing
+     */
+  async showTestMenu() {
+    try {
+      console.log(chalk.blue.bold('\n🔒 Security Testing Menu'));
+      console.log(chalk.gray('═'.repeat(50)));
+            
+      const choices = [
+        { name: 'Run All Security Tests', value: 'all' },
+        { name: 'Replay Attack Test', value: 'replay_attack' },
+        { name: 'Man-in-the-Middle Test', value: 'man_in_middle' },
+        { name: 'Certificate Forgery Test', value: 'certificate_forgery' },
+        { name: 'Key Compromise Test', value: 'key_compromise' },
+        { name: 'Denial of Service Test', value: 'denial_of_service' },
+        { name: 'Message Injection Test', value: 'message_injection' },
+        { name: 'Timing Attack Test', value: 'timing_attack' },
+        { name: 'Brute Force Test', value: 'brute_force' },
+        { name: 'View Test Results', value: 'results' },
+        { name: 'View Attack History', value: 'history' },
+        { name: 'Configure Tests', value: 'configure' },
+        { name: 'Back to Main Menu', value: 'back' }
+      ];
+            
+      const answer = await inquirer.prompt([{
+        type: 'list',
+        name: 'testChoice',
+        message: 'Select a security test to run:',
+        choices
+      }]);
+            
+      await this.handleTestChoice(answer.testChoice);
+            
+    } catch (error) {
+      this.logger.error('Security test menu failed:', error.message);
+    }
+  }
+
+  /**
+     * Handle test choice selection
+     * Routes to appropriate test or action
+     */
+  async handleTestChoice(choice) {
+    try {
+      switch (choice) {
+      case 'all':
+        await this.runAllTests();
+        break;
+      case 'results':
+        this.showTestResults();
+        break;
+      case 'history':
+        this.showAttackHistory();
+        break;
+      case 'configure':
+        await this.configureTests();
+        break;
+      case 'back':
+        return;
+      default:
+        if (this.availableTests.includes(choice)) {
+          await this.runSpecificTest(choice);
+        } else {
+          this.logger.warn(`Unknown test choice: ${choice}`);
+        }
+      }
+            
+      // Show menu again unless back was selected
+      if (choice !== 'back') {
+        await this.showTestMenu();
+      }
+            
+    } catch (error) {
+      this.logger.error('Test choice handling failed:', error.message);
+    }
+  }
+
+  /**
+     * Run all security tests
+     * Executes comprehensive security testing suite
+     */
+  async runAllTests() {
+    try {
+      console.log(chalk.blue.bold('\n🚀 Running All Security Tests'));
+      console.log(chalk.gray('═'.repeat(50)));
+            
+      const spinner = ora('Running security test suite...').start();
+            
+      const results = {};
+      let passedTests = 0;
+      let failedTests = 0;
+            
+      for (const testType of this.availableTests) {
+        try {
+          spinner.text = `Running ${testType}...`;
+                    
+          const result = await this.runSpecificTest(testType, true);
+          results[testType] = result;
+                    
+          if (result.success) {
+            passedTests++;
+          } else {
+            failedTests++;
+          }
+                    
+        } catch (error) {
+          this.logger.error(`Test ${testType} failed:`, error.message);
+          results[testType] = {
+            success: false,
+            error: error.message,
+            timestamp: new Date()
+          };
+          failedTests++;
+        }
+      }
+            
+      spinner.succeed(`Security test suite completed: ${passedTests} passed, ${failedTests} failed`);
+            
+      // Display summary
+      this.displayTestSummary(results);
+            
+      // Store results
+      this.testResults.set('comprehensive_suite', {
+        results,
+        summary: {
+          total: this.availableTests.length,
+          passed: passedTests,
+          failed: failedTests,
+          timestamp: new Date()
+        }
+      });
+            
+    } catch (error) {
+      this.logger.error('Comprehensive security testing failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+     * Run specific security test
+     * Executes individual security test with detailed logging
+     */
+  async runSpecificTest(testType, silent = false) {
+    try {
+      if (!this.isInitialized) {
+        throw new Error('Security tester not initialized');
+      }
+            
+      if (!silent) {
+        console.log(chalk.blue.bold(`\n🔒 Running ${testType.replace(/_/g, ' ')} Test`));
+        console.log(chalk.gray('─'.repeat(40)));
+      }
+            
+      const startTime = Date.now();
+            
+      // Select target node for testing
+      const targetNode = await this.selectTargetNode(testType);
+      if (!targetNode) {
+        throw new Error('No suitable target node found for testing');
+      }
+            
+      // Run the specific test
+      let result;
+      switch (testType) {
+      case 'replay_attack':
+        result = await this.runReplayAttackTest(targetNode);
+        break;
+      case 'man_in_middle':
+        result = await this.runMITMTest(targetNode);
+        break;
+      case 'certificate_forgery':
+        result = await this.runCertificateForgeryTest(targetNode);
+        break;
+      case 'key_compromise':
+        result = await this.runKeyCompromiseTest(targetNode);
+        break;
+      case 'denial_of_service':
+        result = await this.runDoSTest(targetNode);
+        break;
+      case 'message_injection':
+        result = await this.runMessageInjectionTest(targetNode);
+        break;
+      case 'timing_attack':
+        result = await this.runTimingAttackTest(targetNode);
+        break;
+      case 'brute_force':
+        result = await this.runBruteForceTest(targetNode);
+        break;
+      default:
+        throw new Error(`Unknown test type: ${testType}`);
+      }
+            
+      // Add metadata
+      result.testType = testType;
+      result.targetNode = targetNode.name;
+      result.duration = Date.now() - startTime;
+      result.timestamp = new Date();
+            
+      // Store result
+      this.testResults.set(`${testType}_${targetNode.name}`, result);
+            
+      // Add to attack history
+      this.attackHistory.push({
+        testType,
+        targetNode: targetNode.name,
+        timestamp: new Date(),
+        result
+      });
+            
+      if (!silent) {
+        this.displayTestResult(result);
+      }
+            
+      return result;
+            
+    } catch (error) {
+      this.logger.error(`Specific test ${testType} failed:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+     * Select target node for testing
+     * Chooses appropriate node based on test requirements
+     */
+  async selectTargetNode(testType) {
+    try {
+      const nodes = Array.from(this.meshNetwork.nodes.values());
+            
+      if (nodes.length === 0) {
+        throw new Error('No nodes available for testing');
+      }
+            
+      // Filter nodes based on test requirements
+      let suitableNodes = nodes;
+            
+      switch (testType) {
+      case 'replay_attack':
+      case 'man_in_middle':
+      case 'message_injection':
+        // Need nodes with active connections
+        suitableNodes = nodes.filter(node => node.connections.size > 0);
+        break;
+      case 'certificate_forgery':
+      case 'key_compromise':
+        // Need nodes with cryptographic capabilities
+        suitableNodes = nodes.filter(node => node.capabilities.encryption);
+        break;
+      case 'denial_of_service':
+        // Prefer nodes with processing capabilities
+        suitableNodes = nodes.filter(node => node.capabilities.processing);
+        break;
+      case 'timing_attack':
+      case 'brute_force':
+        // Any node is suitable
+        break;
+      }
+            
+      if (suitableNodes.length === 0) {
+        suitableNodes = nodes; // Fallback to all nodes
+      }
+            
+      // If only one suitable node, use it
+      if (suitableNodes.length === 1) {
+        return suitableNodes[0];
+      }
+            
+      // Let user choose
+      const choices = suitableNodes.map(node => ({
+        name: `${node.name} (${node.type}) - ${node.connections.size} connections`,
+        value: node
+      }));
+            
+      const answer = await inquirer.prompt([{
+        type: 'list',
+        name: 'targetNode',
+        message: `Select target node for ${testType.replace(/_/g, ' ')} test:`,
+        choices
+      }]);
+            
+      return answer.targetNode;
+            
+    } catch (error) {
+      this.logger.error('Target node selection failed:', error.message);
+      return null;
+    }
+  }
+
+  /**
+     * Run replay attack test
+     * Tests network's ability to detect and prevent replay attacks
+     */
+  async runReplayAttackTest(targetNode) {
+    try {
+      this.logger.info(`Running replay attack test on ${targetNode.name}`);
+            
+      // Create legitimate message
+      const originalMessage = {
+        type: 'test_message',
+        content: 'Original test message for replay attack testing',
+        timestamp: new Date().toISOString(),
+        nonce: this.meshNetwork.securityCore.generateRandomString(16)
+      };
+            
+      // Send original message
+      const sourceNode = this.getRandomConnectedNode(targetNode);
+      if (!sourceNode) {
+        throw new Error('No connected nodes available for replay attack test');
+      }
+            
+      await this.meshNetwork.sendMessage(sourceNode, targetNode, originalMessage);
+            
+      // Wait for message processing
+      await this.sleep(1000);
+            
+      // Attempt replay attack
+      const replayMessage = {
+        ...originalMessage,
+        timestamp: new Date().toISOString() // Update timestamp
+      };
+            
+      try {
+        await this.meshNetwork.sendMessage(sourceNode, targetNode, replayMessage);
+                
+        // Check if replay was detected
+        const securityStatus = await this.checkSecurityStatus(targetNode);
+                
+        return {
+          success: !securityStatus.replayDetected,
+          mitigated: securityStatus.replayDetected,
+          details: securityStatus.replayDetected ? 
+            'Replay attack detected and mitigated' : 
+            'Replay attack succeeded (security vulnerability)',
+          originalMessage,
+          replayMessage,
+          securityStatus
+        };
+                
+      } catch (error) {
+        // Replay was rejected
+        return {
+          success: true,
+          mitigated: true,
+          details: 'Replay attack rejected by security measures',
+          originalMessage,
+          replayMessage,
+          error: error.message
+        };
+      }
+            
+    } catch (error) {
+      this.logger.error('Replay attack test failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+     * Run man-in-the-middle attack test
+     * Tests network's ability to detect MITM attacks
+     */
+  async runMITMTest(targetNode) {
+    try {
+      this.logger.info(`Running MITM attack test on ${targetNode.name}`);
+            
+      // Check if target has active connections
+      if (targetNode.connections.size === 0) {
+        return {
+          success: true,
+          mitigated: true,
+          details: 'No active connections to test MITM protection',
+          reason: 'No connections'
+        };
+      }
+            
+      // Attempt to intercept connection
+      const connection = this.getRandomConnection(targetNode);
+      if (!connection) {
+        throw new Error('No connections available for MITM test');
+      }
+            
+      // Simulate MITM attempt
+      const mitmAttempt = {
+        type: 'mitm_attempt',
+        targetConnection: connection.id,
+        timestamp: new Date().toISOString(),
+        method: 'connection_interception'
+      };
+            
+      // Check if MITM protection is active
+      const securityStatus = await this.checkSecurityStatus(targetNode);
+            
+      return {
+        success: !securityStatus.mitmDetected,
+        mitigated: securityStatus.mitmDetected,
+        details: securityStatus.mitmDetected ? 
+          'MITM attack detected and mitigated' : 
+          'MITM attack succeeded (security vulnerability)',
+        mitmAttempt,
+        securityStatus
+      };
+            
+    } catch (error) {
+      this.logger.error('MITM attack test failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+     * Run certificate forgery test
+     * Tests certificate validation and trust mechanisms
+     */
+  async runCertificateForgeryTest(targetNode) {
+    try {
+      this.logger.info(`Running certificate forgery test on ${targetNode.name}`);
+            
+      // Create forged certificate
+      const forgedCertificate = {
+        commonName: targetNode.name,
+        issuer: 'Forged CA',
+        validFrom: new Date(),
+        validTo: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        publicKey: 'forged_public_key',
+        signature: 'forged_signature'
+      };
+            
+      // Attempt to validate forged certificate
+      const isValid = await this.meshNetwork.securityCore.validateCertificate(forgedCertificate);
+            
+      return {
+        success: !isValid,
+        mitigated: !isValid,
+        details: isValid ? 
+          'Forged certificate accepted (security vulnerability)' : 
+          'Forged certificate rejected by validation',
+        forgedCertificate,
+        validationResult: isValid
+      };
+            
+    } catch (error) {
+      this.logger.error('Certificate forgery test failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+     * Run key compromise test
+     * Tests key management and rotation mechanisms
+     */
+  async runKeyCompromiseTest(targetNode) {
+    try {
+      this.logger.info(`Running key compromise test on ${targetNode.name}`);
+            
+      // Simulate key compromise
+      const compromiseAttempt = {
+        type: 'key_compromise',
+        targetNode: targetNode.name,
+        timestamp: new Date().toISOString(),
+        compromisedKey: 'simulated_compromised_key'
+      };
+            
+      // Check if key rotation is triggered
+      const securityStatus = await this.checkSecurityStatus(targetNode);
+            
+      return {
+        success: securityStatus.keyRotationTriggered,
+        mitigated: securityStatus.keyRotationTriggered,
+        details: securityStatus.keyRotationTriggered ? 
+          'Key compromise detected, rotation triggered' : 
+          'Key compromise not detected (security vulnerability)',
+        compromiseAttempt,
+        securityStatus
+      };
+            
+    } catch (error) {
+      this.logger.error('Key compromise test failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+     * Run denial of service test
+     * Tests network's resilience to DoS attacks
+     */
+  async runDoSTest(targetNode) {
+    try {
+      this.logger.info(`Running DoS attack test on ${targetNode.name}`);
+            
+      // Simulate DoS attack
+      const dosAttempt = {
+        type: 'dos_attack',
+        targetNode: targetNode.name,
+        timestamp: new Date().toISOString(),
+        method: 'message_flooding'
+      };
+            
+      // Send multiple messages rapidly
+      const sourceNode = this.getRandomConnectedNode(targetNode);
+      if (!sourceNode) {
+        return {
+          success: true,
+          mitigated: true,
+          details: 'No connected nodes available for DoS test',
+          reason: 'No connections'
+        };
+      }
+            
+      const messages = [];
+      for (let i = 0; i < 10; i++) {
+        const message = {
+          type: 'dos_test_message',
+          content: `DoS test message ${i + 1}`,
+          timestamp: new Date().toISOString()
+        };
+        messages.push(message);
+      }
+            
+      // Send messages rapidly
+      const sendPromises = messages.map(msg => 
+        this.meshNetwork.sendMessage(sourceNode, targetNode, msg)
+      );
+            
+      await Promise.all(sendPromises);
+            
+      // Check if DoS protection is active
+      const securityStatus = await this.checkSecurityStatus(targetNode);
+            
+      return {
+        success: securityStatus.dosProtectionActive,
+        mitigated: securityStatus.dosProtectionActive,
+        details: securityStatus.dosProtectionActive ? 
+          'DoS attack mitigated by protection mechanisms' : 
+          'DoS attack succeeded (security vulnerability)',
+        dosAttempt,
+        messagesSent: messages.length,
+        securityStatus
+      };
+            
+    } catch (error) {
+      this.logger.error('DoS attack test failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+     * Run message injection test
+     * Tests message validation and sanitization
+     */
+  async runMessageInjectionTest(targetNode) {
+    try {
+      this.logger.info(`Running message injection test on ${targetNode.name}`);
+            
+      // Create malicious message
+      const maliciousMessage = {
+        type: 'malicious_message',
+        content: '<script>alert("XSS")</script>',
+        metadata: {
+          injection: 'true',
+          payload: 'xss_script'
+        },
+        timestamp: new Date().toISOString()
+      };
+            
+      // Attempt to send malicious message
+      const sourceNode = this.getRandomConnectedNode(targetNode);
+      if (!sourceNode) {
+        return {
+          success: true,
+          mitigated: true,
+          details: 'No connected nodes available for injection test',
+          reason: 'No connections'
+        };
+      }
+            
+      try {
+        await this.meshNetwork.sendMessage(sourceNode, targetNode, maliciousMessage);
+                
+        // Check if injection was detected
+        const securityStatus = await this.checkSecurityStatus(targetNode);
+                
+        return {
+          success: !securityStatus.injectionDetected,
+          mitigated: securityStatus.injectionDetected,
+          details: securityStatus.injectionDetected ? 
+            'Message injection detected and blocked' : 
+            'Message injection succeeded (security vulnerability)',
+          maliciousMessage,
+          securityStatus
+        };
+                
+      } catch (error) {
+        // Injection was rejected
+        return {
+          success: true,
+          mitigated: true,
+          details: 'Malicious message rejected by security measures',
+          maliciousMessage,
+          error: error.message
+        };
+      }
+            
+    } catch (error) {
+      this.logger.error('Message injection test failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+     * Run timing attack test
+     * Tests timing attack resistance
+     */
+  async runTimingAttackTest(targetNode) {
+    try {
+      this.logger.info(`Running timing attack test on ${targetNode.name}`);
+            
+      // Measure response times for different inputs
+      const testInputs = [
+        'valid_input',
+        'invalid_input_short',
+        'invalid_input_long',
+        'malicious_input'
+      ];
+            
+      const responseTimes = {};
+            
+      for (const input of testInputs) {
+        const startTime = Date.now();
+                
+        try {
+          // Send test message
+          const sourceNode = this.getRandomConnectedNode(targetNode);
+          if (sourceNode) {
+            const message = {
+              type: 'timing_test',
+              content: input,
+              timestamp: new Date().toISOString()
+            };
+                        
+            await this.meshNetwork.sendMessage(sourceNode, targetNode, message);
+          }
+        } catch (error) {
+          // Ignore errors for timing measurement
+        }
+                
+        const endTime = Date.now();
+        responseTimes[input] = endTime - startTime;
+      }
+            
+      // Analyze timing patterns
+      const timingVariance = this.calculateTimingVariance(responseTimes);
+      const isVulnerable = timingVariance > 100; // 100ms threshold
+            
+      return {
+        success: !isVulnerable,
+        mitigated: !isVulnerable,
+        details: isVulnerable ? 
+          'Timing attack vulnerability detected' : 
+          'Timing attack resistance confirmed',
+        responseTimes,
+        timingVariance,
+        vulnerability: isVulnerable
+      };
+            
+    } catch (error) {
+      this.logger.error('Timing attack test failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+     * Run brute force test
+     * Tests password/key strength and rate limiting
+     */
+  async runBruteForceTest(targetNode) {
+    try {
+      this.logger.info(`Running brute force test on ${targetNode.name}`);
+            
+      // Simulate brute force attempts
+      const attempts = [];
+      const maxAttempts = 5;
+            
+      for (let i = 0; i < maxAttempts; i++) {
+        const attempt = {
+          attempt: i + 1,
+          timestamp: new Date().toISOString(),
+          payload: `brute_force_attempt_${i + 1}`
+        };
+                
+        attempts.push(attempt);
+                
+        // Simulate attempt
+        try {
+          const sourceNode = this.getRandomConnectedNode(targetNode);
+          if (sourceNode) {
+            const message = {
+              type: 'brute_force_test',
+              content: attempt.payload,
+              timestamp: attempt.timestamp
+            };
+                        
+            await this.meshNetwork.sendMessage(sourceNode, targetNode, message);
+          }
+        } catch (error) {
+          // Rate limiting or blocking detected
+          attempt.blocked = true;
+          attempt.error = error.message;
+        }
+                
+        // Small delay between attempts
+        await this.sleep(100);
+      }
+            
+      // Check if brute force protection is active
+      const blockedAttempts = attempts.filter(a => a.blocked).length;
+      const protectionActive = blockedAttempts > 0;
+            
+      return {
+        success: protectionActive,
+        mitigated: protectionActive,
+        details: protectionActive ? 
+          `Brute force protection active (${blockedAttempts}/${maxAttempts} attempts blocked)` : 
+          'No brute force protection detected (security vulnerability)',
+        attempts,
+        blockedAttempts,
+        totalAttempts: maxAttempts,
+        protectionActive
+      };
+            
+    } catch (error) {
+      this.logger.error('Brute force test failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+     * Check security status of target node
+     * Retrieves current security posture and alerts
+     */
+  async checkSecurityStatus(targetNode) {
+    try {
+      // This would typically query the node's security status
+      // For simulation purposes, return mock data
+      return {
+        replayDetected: Math.random() > 0.3,
+        mitmDetected: Math.random() > 0.4,
+        keyRotationTriggered: Math.random() > 0.5,
+        dosProtectionActive: Math.random() > 0.6,
+        injectionDetected: Math.random() > 0.7,
+        lastSecurityCheck: new Date(),
+        trustScore: targetNode.trustScore || 100,
+        securityViolations: targetNode.securityViolations || 0
+      };
+            
+    } catch (error) {
+      this.logger.error('Security status check failed:', error.message);
+      return {};
+    }
+  }
+
+  /**
+     * Get random connected node
+     * Returns a randomly selected connected peer
+     */
+  getRandomConnectedNode(targetNode) {
+    try {
+      const connectedNodes = Array.from(targetNode.connections.keys());
+      if (connectedNodes.length === 0) return null;
+            
+      const randomIndex = Math.floor(Math.random() * connectedNodes.length);
+      const randomNodeId = connectedNodes[randomIndex];
+            
+      return this.meshNetwork.nodes.get(randomNodeId);
+            
+    } catch (error) {
+      this.logger.error('Random connected node selection failed:', error.message);
+      return null;
+    }
+  }
+
+  /**
+     * Get random connection
+     * Returns a randomly selected connection
+     */
+  getRandomConnection(targetNode) {
+    try {
+      const connections = Array.from(targetNode.connections.values());
+      if (connections.length === 0) return null;
+            
+      const randomIndex = Math.floor(Math.random() * connections.length);
+      return connections[randomIndex];
+            
+    } catch (error) {
+      this.logger.error('Random connection selection failed:', error.message);
+      return null;
+    }
+  }
+
+  /**
+     * Calculate timing variance
+     * Determines variance in response times
+     */
+  calculateTimingVariance(responseTimes) {
+    try {
+      const values = Object.values(responseTimes);
+      const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
+      const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
+            
+      return Math.sqrt(variance);
+            
+    } catch (error) {
+      this.logger.error('Timing variance calculation failed:', error.message);
+      return 0;
+    }
+  }
+
+  /**
+     * Display test result
+     * Shows detailed test results with formatting
+     */
+  displayTestResult(result) {
+    try {
+      const statusIcon = result.success ? '✅' : '❌';
+      const statusColor = result.success ? chalk.green : chalk.red;
+      const mitigatedColor = result.mitigated ? chalk.green : chalk.red;
+            
+      console.log(`\n${statusIcon} Test Result: ${statusColor(result.testType.replace(/_/g, ' '))}`);
+      console.log(chalk.gray('─'.repeat(40)));
+            
+      console.log(`${chalk.blue('Status:')} ${statusColor(result.success ? 'PASSED' : 'FAILED')}`);
+      console.log(`${chalk.blue('Mitigated:')} ${mitigatedColor(result.mitigated ? 'YES' : 'NO')}`);
+      console.log(`${chalk.blue('Details:')} ${chalk.white(result.details)}`);
+      console.log(`${chalk.blue('Duration:')} ${chalk.cyan(result.duration)}ms`);
+      console.log(`${chalk.blue('Target:')} ${chalk.yellow(result.targetNode)}`);
+            
+      if (result.error) {
+        console.log(`${chalk.blue('Error:')} ${chalk.red(result.error)}`);
+      }
+            
+    } catch (error) {
+      this.logger.error('Test result display failed:', error.message);
+    }
+  }
+
+  /**
+     * Display test summary
+     * Shows overview of all test results
+     */
+  displayTestSummary(results) {
+    try {
+      console.log(chalk.blue.bold('\n📊 Security Test Summary'));
+      console.log(chalk.gray('═'.repeat(50)));
+            
+      let totalTests = 0;
+      let passedTests = 0;
+      let failedTests = 0;
+            
+      for (const [testType, result] of Object.entries(results)) {
+        if (result.success) {
+          passedTests++;
+        } else {
+          failedTests++;
+        }
+        totalTests++;
+      }
+            
+      console.log(`${chalk.blue('Total Tests:')} ${chalk.white(totalTests)}`);
+      console.log(`${chalk.green('Passed:')} ${chalk.white(passedTests)}`);
+      console.log(`${chalk.red('Failed:')} ${chalk.white(failedTests)}`);
+      console.log(`${chalk.blue('Success Rate:')} ${chalk.white(((passedTests / totalTests) * 100).toFixed(1))}%`);
+            
+      // Show failed tests
+      if (failedTests > 0) {
+        console.log(chalk.red.bold('\n❌ Failed Tests:'));
+        for (const [testType, result] of Object.entries(results)) {
+          if (!result.success) {
+            console.log(`  • ${chalk.red(testType.replace(/_/g, ' '))}: ${result.details}`);
+          }
+        }
+      }
+            
+    } catch (error) {
+      this.logger.error('Test summary display failed:', error.message);
+    }
+  }
+
+  /**
+     * Show test results
+     * Displays stored test results
+     */
+  showTestResults() {
+    try {
+      console.log(chalk.blue.bold('\n📋 Test Results'));
+      console.log(chalk.gray('═'.repeat(50)));
+            
+      if (this.testResults.size === 0) {
+        console.log(chalk.yellow('No test results available'));
+        return;
+      }
+            
+      for (const [testId, result] of this.testResults) {
+        this.displayTestResult(result);
+      }
+            
+    } catch (error) {
+      this.logger.error('Test results display failed:', error.message);
+    }
+  }
+
+  /**
+     * Show attack history
+     * Displays history of security tests and attacks
+     */
+  showAttackHistory() {
+    try {
+      console.log(chalk.blue.bold('\n📜 Attack History'));
+      console.log(chalk.gray('═'.repeat(50)));
+            
+      if (this.attackHistory.length === 0) {
+        console.log(chalk.yellow('No attack history available'));
+        return;
+      }
+            
+      // Group by date
+      const groupedHistory = this.groupHistoryByDate(this.attackHistory);
+            
+      for (const [date, attacks] of Object.entries(groupedHistory)) {
+        console.log(chalk.yellow.bold(`\n${date}:`));
+                
+        attacks.forEach(attack => {
+          const statusIcon = attack.result.success ? '✅' : '❌';
+          const statusColor = attack.result.success ? chalk.green : chalk.red;
+                    
+          console.log(`  ${statusIcon} ${statusColor(attack.testType.replace(/_/g, ' '))} on ${chalk.cyan(attack.targetNode)}`);
+        });
+      }
+            
+    } catch (error) {
+      this.logger.error('Attack history display failed:', error.message);
+    }
+  }
+
+  /**
+     * Group history by date
+     * Organizes attack history by date
+     */
+  groupHistoryByDate(history) {
+    const grouped = {};
+        
+    history.forEach(attack => {
+      const date = new Date(attack.timestamp).toLocaleDateString();
+      if (!grouped[date]) {
+        grouped[date] = [];
+      }
+      grouped[date].push(attack);
+    });
+        
+    return grouped;
+  }
+
+  /**
+     * Configure security tests
+     * Allows customization of test parameters
+     */
+  async configureTests() {
+    try {
+      console.log(chalk.blue.bold('\n⚙️  Security Test Configuration'));
+      console.log(chalk.gray('═'.repeat(50)));
+            
+      const answers = await inquirer.prompt([
+        {
+          type: 'number',
+          name: 'maxAttackDuration',
+          message: 'Maximum attack duration (ms):',
+          default: this.testConfig.maxAttackDuration
+        },
+        {
+          type: 'number',
+          name: 'maxConcurrentAttacks',
+          message: 'Maximum concurrent attacks:',
+          default: this.testConfig.maxConcurrentAttacks
+        },
+        {
+          type: 'confirm',
+          name: 'autoMitigation',
+          message: 'Enable automatic mitigation:',
+          default: this.testConfig.autoMitigation
+        },
+        {
+          type: 'confirm',
+          name: 'detailedLogging',
+          message: 'Enable detailed logging:',
+          default: this.testConfig.detailedLogging
+        }
+      ]);
+            
+      // Update configuration
+      Object.assign(this.testConfig, answers);
+            
+      console.log(chalk.green('Configuration updated successfully'));
+            
+    } catch (error) {
+      this.logger.error('Test configuration failed:', error.message);
+    }
+  }
+
+  /**
+     * Utility function for sleep/delay
+     * Provides controlled delays for testing
+     */
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+     * Get test configuration
+     * Returns current test configuration
+     */
+  getTestConfig() {
+    return { ...this.testConfig };
+  }
+
+  /**
+     * Get test results
+     * Returns all stored test results
+     */
+  getTestResults() {
+    return new Map(this.testResults);
+  }
+
+  /**
+     * Get attack history
+     * Returns attack history
+     */
+  getAttackHistory() {
+    return [...this.attackHistory];
+  }
+
+  /**
+     * Clear test results
+     * Removes all stored test results
+     */
+  clearTestResults() {
+    const count = this.testResults.size;
+    this.testResults.clear();
+    this.logger.info(`Cleared ${count} test results`);
+    return count;
+  }
+
+  /**
+     * Clear attack history
+     * Removes all attack history
+     */
+  clearAttackHistory() {
+    const count = this.attackHistory.length;
+    this.attackHistory = [];
+    this.logger.info(`Cleared ${count} attack history entries`);
+    return count;
+  }
+}

@@ -1,0 +1,1152 @@
+/**
+ * CLIInterface - Main Command Line Interface
+ * 
+ * Provides an interactive command-line interface for managing the mesh network
+ * simulation, including node management, security testing, and network analysis.
+ * 
+ * @author Benjamin Morin
+ * @version 1.0.0
+ */
+
+import { Command } from 'commander';
+import inquirer from 'inquirer';
+import chalk from 'chalk';
+import ora from 'ora';
+import table from 'table';
+import { Logger } from '../utils/Logger.js';
+import { NetworkVisualizer } from './NetworkVisualizer.js';
+import { SecurityTester } from './SecurityTester.js';
+
+export class CLIInterface {
+  constructor(meshNetwork) {
+    this.meshNetwork = meshNetwork;
+    this.logger = new Logger();
+    this.program = new Command();
+    this.isRunning = false;
+    this.currentNode = null;
+    this.commandHistory = [];
+    this.autoComplete = new Set();
+        
+    // Initialize CLI components
+    this.networkVisualizer = new NetworkVisualizer();
+    this.securityTester = new SecurityTester(meshNetwork);
+        
+    this.setupCommands();
+    this.setupAutoComplete();
+  }
+
+  /**
+     * Start the CLI interface
+     * Initializes the command parser and starts interactive mode
+     */
+  async start() {
+    try {
+      this.logger.info('Starting CLI interface...');
+            
+      // Check if specific command was provided
+      if (process.argv.length > 2) {
+        // Parse and execute specific command
+        this.program.parse(process.argv);
+      } else {
+        // Start interactive mode
+        await this.startInteractiveMode();
+      }
+            
+    } catch (error) {
+      this.logger.error('CLI startup failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+     * Setup all CLI commands and options
+     * Configures the command structure and help system
+     */
+  setupCommands() {
+    this.program
+      .name('secure-mesh-cli')
+      .description('Offline mesh network security research platform')
+      .version('1.0.0')
+      .option('-v, --verbose', 'Enable verbose logging')
+      .option('-d, --debug', 'Enable debug mode');
+
+    // Node management commands
+    this.program
+      .command('node')
+      .description('Node management operations')
+      .addCommand(this.createNodeCommand())
+      .addCommand(this.removeNodeCommand())
+      .addCommand(this.listNodesCommand())
+      .addCommand(this.connectNodesCommand());
+
+    // Network commands
+    this.program
+      .command('network')
+      .description('Network operations and analysis')
+      .addCommand(this.showTopologyCommand())
+      .addCommand(this.showStatsCommand())
+      .addCommand(this.searchNodesCommand());
+
+    // Security commands
+    this.program
+      .command('security')
+      .description('Security testing and analysis')
+      .addCommand(this.testSecurityCommand())
+      .addCommand(this.simulateAttackCommand())
+      .addCommand(this.showSecurityStatusCommand());
+
+    // Communication commands
+    this.program
+      .command('message')
+      .description('Message operations')
+      .addCommand(this.sendMessageCommand())
+      .addCommand(this.broadcastCommand())
+      .addCommand(this.showMessagesCommand());
+
+    // Simulation commands
+    this.program
+      .command('simulate')
+      .description('Simulation control and scenarios')
+      .addCommand(this.startSimulationCommand())
+      .addCommand(this.stopSimulationCommand())
+      .addCommand(this.loadScenarioCommand());
+
+    // Help and info commands
+    this.program
+      .command('info')
+      .description('Show system information')
+      .action(this.showSystemInfo.bind(this));
+
+    this.program
+      .command('help')
+      .description('Show detailed help')
+      .action(this.showDetailedHelp.bind(this));
+  }
+
+  /**
+     * Create node command
+     */
+  createNodeCommand() {
+    const command = new Command('create')
+      .description('Create a new node in the mesh network')
+      .argument('<name>', 'Node name')
+      .option('-t, --type <type>', 'Node type (standard, router, gateway)', 'standard')
+      .option('-c, --capabilities <capabilities>', 'Node capabilities (JSON string)')
+      .action(async (name, options) => {
+        try {
+          const spinner = ora('Creating node...').start();
+                    
+          let capabilities = {};
+          if (options.capabilities) {
+            try {
+              capabilities = JSON.parse(options.capabilities);
+            } catch (error) {
+              spinner.fail('Invalid capabilities JSON format');
+              return;
+            }
+          }
+                    
+          const node = await this.meshNetwork.createNode(name, options.type, capabilities);
+                    
+          spinner.succeed(`Node '${name}' created successfully`);
+          this.logger.info(`Node ID: ${node.id}`);
+          this.logger.info(`Type: ${node.type}`);
+          this.logger.info(`Capabilities: ${Object.keys(capabilities).join(', ')}`);
+                    
+        } catch (error) {
+          this.logger.error('Failed to create node:', error.message);
+        }
+      });
+        
+    return command;
+  }
+
+  /**
+     * Remove node command
+     */
+  removeNodeCommand() {
+    const command = new Command('remove')
+      .description('Remove a node from the mesh network')
+      .argument('<name>', 'Node name')
+      .option('-f, --force', 'Force removal without confirmation')
+      .action(async (name, options) => {
+        try {
+          if (!options.force) {
+            const answer = await inquirer.prompt([{
+              type: 'confirm',
+              name: 'confirm',
+              message: `Are you sure you want to remove node '${name}'?`,
+              default: false
+            }]);
+                        
+            if (!answer.confirm) {
+              this.logger.info('Node removal cancelled');
+              return;
+            }
+          }
+                    
+          const spinner = ora('Removing node...').start();
+          await this.meshNetwork.removeNode(name);
+          spinner.succeed(`Node '${name}' removed successfully`);
+                    
+        } catch (error) {
+          this.logger.error('Failed to remove node:', error.message);
+        }
+      });
+        
+    return command;
+  }
+
+  /**
+     * List nodes command
+     */
+  listNodesCommand() {
+    const command = new Command('list')
+      .description('List all nodes in the network')
+      .option('-v, --verbose', 'Show detailed node information')
+      .option('-f, --format <format>', 'Output format (table, json, csv)', 'table')
+      .action(async (options) => {
+        try {
+          const nodes = Array.from(this.meshNetwork.nodes.values());
+                    
+          if (nodes.length === 0) {
+            this.logger.info('No nodes found in the network');
+            return;
+          }
+                    
+          if (options.format === 'json') {
+            console.log(JSON.stringify(nodes, null, 2));
+          } else if (options.format === 'csv') {
+            this.outputNodesCSV(nodes);
+          } else {
+            this.outputNodesTable(nodes, options.verbose);
+          }
+                    
+        } catch (error) {
+          this.logger.error('Failed to list nodes:', error.message);
+        }
+      });
+        
+    return command;
+  }
+
+  /**
+     * Connect nodes command
+     */
+  connectNodesCommand() {
+    const command = new Command('connect')
+      .description('Establish secure connection between two nodes')
+      .argument('<source>', 'Source node name')
+      .argument('<target>', 'Target node name')
+      .option('-t, --type <type>', 'Connection type (secure, trusted)', 'secure')
+      .action(async (source, target, options) => {
+        try {
+          const spinner = ora('Establishing connection...').start();
+                    
+          const sourceNode = this.meshNetwork.nodes.get(source);
+          const targetNode = this.meshNetwork.nodes.get(target);
+                    
+          if (!sourceNode || !targetNode) {
+            spinner.fail('One or both nodes not found');
+            return;
+          }
+                    
+          const connection = await this.meshNetwork.establishConnection(
+            sourceNode, 
+            targetNode, 
+            options.type
+          );
+                    
+          spinner.succeed(`Secure connection established: ${source} <-> ${target}`);
+          this.logger.info(`Connection ID: ${connection.id}`);
+          this.logger.info(`Security Level: ${connection.securityLevel}`);
+          this.logger.info(`Algorithm: ${connection.encryptionAlgorithm}`);
+                    
+        } catch (error) {
+          this.logger.error('Failed to establish connection:', error.message);
+        }
+      });
+        
+    return command;
+  }
+
+  /**
+     * Show topology command
+     */
+  showTopologyCommand() {
+    const command = new Command('topology')
+      .description('Show network topology visualization')
+      .option('-f, --format <format>', 'Output format (ascii, graph, json)', 'ascii')
+      .action(async (options) => {
+        try {
+          const spinner = ora('Generating topology...').start();
+                    
+          const topology = await this.meshNetwork.getNetworkTopology();
+                    
+          spinner.succeed('Topology generated successfully');
+                    
+          if (options.format === 'json') {
+            console.log(JSON.stringify(topology, null, 2));
+          } else if (options.format === 'graph') {
+            this.networkVisualizer.outputGraphFormat(topology);
+          } else {
+            this.networkVisualizer.outputAsciiFormat(topology);
+          }
+                    
+        } catch (error) {
+          this.logger.error('Failed to show topology:', error.message);
+        }
+      });
+        
+    return command;
+  }
+
+  /**
+     * Show stats command
+     */
+  showStatsCommand() {
+    const command = new Command('stats')
+      .description('Show network statistics and health metrics')
+      .option('-r, --refresh <seconds>', 'Auto-refresh interval in seconds')
+      .action(async (options) => {
+        try {
+          if (options.refresh) {
+            await this.startStatsMonitor(parseInt(options.refresh));
+          } else {
+            await this.displayNetworkStats();
+          }
+        } catch (error) {
+          this.logger.error('Failed to show stats:', error.message);
+        }
+      });
+        
+    return command;
+  }
+
+  /**
+     * Search nodes command
+     */
+  searchNodesCommand() {
+    const command = new Command('search')
+      .description('Search for nodes in the network')
+      .option('-n, --name <name>', 'Search by node name (partial match)')
+      .option('-t, --type <type>', 'Search by node type')
+      .option('-c, --capability <capability>', 'Search by capability')
+      .option('-l, --limit <limit>', 'Maximum number of results', '50')
+      .action(async (options) => {
+        try {
+          const spinner = ora('Searching nodes...').start();
+                    
+          const query = {};
+          if (options.name) query.name = options.name;
+          if (options.type) query.type = options.type;
+          if (options.capability) query.capability = options.capability;
+                    
+          const results = await this.meshNetwork.searchNodes(query, {
+            limit: parseInt(options.limit)
+          });
+                    
+          spinner.succeed(`Found ${results.length} nodes`);
+                    
+          if (results.length > 0) {
+            this.outputSearchResults(results);
+          }
+                    
+        } catch (error) {
+          this.logger.error('Failed to search nodes:', error.message);
+        }
+      });
+        
+    return command;
+  }
+
+  /**
+     * Test security command
+     */
+  testSecurityCommand() {
+    const command = new Command('test')
+      .description('Run security tests on the network')
+      .option('-a, --all', 'Run all security tests')
+      .option('-t, --type <type>', 'Specific test type')
+      .option('-n, --node <node>', 'Target specific node')
+      .action(async (options) => {
+        try {
+          if (options.all) {
+            await this.securityTester.runAllTests();
+          } else if (options.type) {
+            await this.securityTester.runSpecificTest(options.type, options.node);
+          } else {
+            await this.securityTester.showTestMenu();
+          }
+        } catch (error) {
+          this.logger.error('Security testing failed:', error.message);
+        }
+      });
+        
+    return command;
+  }
+
+  /**
+     * Simulate attack command
+     */
+  simulateAttackCommand() {
+    const command = new Command('attack')
+      .description('Simulate security attacks on the network')
+      .argument('<type>', 'Attack type (replay, mitm, forgery, compromise)')
+      .argument('<target>', 'Target node name')
+      .option('-o, --options <options>', 'Attack options (JSON string)')
+      .action(async (type, target, options) => {
+        try {
+          const spinner = ora(`Simulating ${type} attack...`).start();
+                    
+          const targetNode = this.meshNetwork.nodes.get(target);
+          if (!targetNode) {
+            spinner.fail(`Target node '${target}' not found`);
+            return;
+          }
+                    
+          let attackOptions = {};
+          if (options.options) {
+            try {
+              attackOptions = JSON.parse(options.options);
+            } catch (error) {
+              spinner.fail('Invalid attack options JSON format');
+              return;
+            }
+          }
+                    
+          const result = await this.meshNetwork.simulateAttack(type, targetNode, attackOptions);
+                    
+          spinner.succeed(`Attack simulation completed: ${type}`);
+          this.logger.info(`Attack ID: ${result.attackId}`);
+          this.logger.info(`Success: ${result.success}`);
+          this.logger.info(`Mitigated: ${result.mitigated}`);
+          this.logger.info(`Details: ${result.details}`);
+                    
+        } catch (error) {
+          this.logger.error('Attack simulation failed:', error.message);
+        }
+      });
+        
+    return command;
+  }
+
+  /**
+     * Send message command
+     */
+  sendMessageCommand() {
+    const command = new Command('send')
+      .description('Send encrypted message between nodes')
+      .argument('<source>', 'Source node name')
+      .argument('<target>', 'Target node name')
+      .argument('<message>', 'Message content')
+      .option('-t, --type <type>', 'Message type', 'data')
+      .option('-p, --priority <priority>', 'Message priority (low, normal, high)', 'normal')
+      .action(async (source, target, message, options) => {
+        try {
+          const spinner = ora('Sending message...').start();
+                    
+          const sourceNode = this.meshNetwork.nodes.get(source);
+          const targetNode = this.meshNetwork.nodes.get(target);
+                    
+          if (!sourceNode || !targetNode) {
+            spinner.fail('One or both nodes not found');
+            return;
+          }
+                    
+          const messageObj = {
+            type: options.type,
+            content: message,
+            priority: options.priority,
+            timestamp: new Date().toISOString()
+          };
+                    
+          const result = await this.meshNetwork.sendMessage(sourceNode, targetNode, messageObj);
+                    
+          spinner.succeed('Message sent successfully');
+          this.logger.info(`Message ID: ${result.id}`);
+          this.logger.info(`Encryption: ${result.encryptedData.algorithm}`);
+          this.logger.info(`Security Level: ${result.securityLevel}`);
+                    
+        } catch (error) {
+          this.logger.error('Failed to send message:', error.message);
+        }
+      });
+        
+    return command;
+  }
+
+  /**
+     * Broadcast message command
+     */
+  broadcastCommand() {
+    const command = new Command('broadcast')
+      .description('Broadcast message to all nodes in network')
+      .argument('<source>', 'Source node name')
+      .argument('<message>', 'Message content')
+      .option('-t, --type <type>', 'Message type', 'broadcast')
+      .option('-p, --priority <priority>', 'Message priority (low, normal, high)', 'normal')
+      .action(async (source, message, options) => {
+        try {
+          const spinner = ora('Broadcasting message...').start();
+                    
+          const sourceNode = this.meshNetwork.nodes.get(source);
+          if (!sourceNode) {
+            spinner.fail('Source node not found');
+            return;
+          }
+                    
+          const messageObj = {
+            type: options.type,
+            content: message,
+            priority: options.priority,
+            timestamp: new Date().toISOString()
+          };
+                    
+          // Broadcast to all other nodes
+          const targetNodes = Array.from(this.meshNetwork.nodes.values())
+            .filter(node => node.id !== sourceNode.id);
+                    
+          if (targetNodes.length === 0) {
+            spinner.fail('No target nodes available for broadcast');
+            return;
+          }
+                    
+          const results = [];
+          for (const targetNode of targetNodes) {
+            try {
+              const result = await this.meshNetwork.sendMessage(sourceNode, targetNode, messageObj);
+              results.push({ node: targetNode.name, success: true, id: result.id });
+            } catch (error) {
+              results.push({ node: targetNode.name, success: false, error: error.message });
+            }
+          }
+                    
+          const successful = results.filter(r => r.success).length;
+          const failed = results.filter(r => !r.success).length;
+                    
+          spinner.succeed(`Broadcast completed: ${successful} successful, ${failed} failed`);
+                    
+          if (failed > 0) {
+            console.log(chalk.yellow('\nFailed deliveries:'));
+            results.filter(r => !r.success).forEach(r => {
+              console.log(`  • ${r.node}: ${r.error}`);
+            });
+          }
+                    
+        } catch (error) {
+          this.logger.error('Failed to broadcast message:', error.message);
+        }
+      });
+        
+    return command;
+  }
+
+  /**
+     * Start interactive mode
+     */
+  async startInteractiveMode() {
+    this.isRunning = true;
+    this.logger.info('Starting interactive mode...');
+        
+    console.log(chalk.blue.bold('\nWelcome to Secure Mesh CLI Interactive Mode!'));
+    console.log(chalk.gray('Type "help" for available commands or "exit" to quit.\n'));
+        
+    while (this.isRunning) {
+      try {
+        const input = await this.getUserInput();
+                
+        if (input.toLowerCase() === 'exit' || input.toLowerCase() === 'quit') {
+          await this.exitInteractiveMode();
+          break;
+        }
+                
+        if (input.toLowerCase() === 'help') {
+          this.showInteractiveHelp();
+          continue;
+        }
+                
+        if (input.trim() === '') {
+          continue;
+        }
+                
+        // Parse and execute command
+        await this.executeInteractiveCommand(input);
+                
+      } catch (error) {
+        this.logger.error('Interactive command error:', error.message);
+      }
+    }
+  }
+
+  /**
+     * Get user input with auto-completion
+     */
+  async getUserInput() {
+    const questions = [{
+      type: 'input',
+      name: 'command',
+      message: chalk.green('mesh>'),
+      prefix: '',
+      validate: (input) => {
+        if (input.trim() === '') return true;
+        return true;
+      }
+    }];
+        
+    const answer = await inquirer.prompt(questions);
+    return answer.command;
+  }
+
+  /**
+     * Execute interactive command
+     */
+  async executeInteractiveCommand(input) {
+    try {
+      // Add to command history
+      this.commandHistory.push(input);
+            
+      // Parse command
+      const args = input.trim().split(/\s+/);
+      const command = args[0].toLowerCase();
+      const params = args.slice(1);
+            
+      switch (command) {
+      case 'create':
+        await this.handleCreateNode(params);
+        break;
+      case 'remove':
+        await this.handleRemoveNode(params);
+        break;
+      case 'list':
+        await this.handleListNodes(params);
+        break;
+      case 'connect':
+        await this.handleConnectNodes(params);
+        break;
+      case 'topology':
+        await this.handleShowTopology(params);
+        break;
+      case 'stats':
+        await this.handleShowStats(params);
+        break;
+      case 'search':
+        await this.handleSearchNodes(params);
+        break;
+      case 'send':
+        await this.handleSendMessage(params);
+        break;
+      case 'attack':
+        await this.handleSimulateAttack(params);
+        break;
+      case 'clear':
+        console.clear();
+        break;
+      case 'history':
+        this.showCommandHistory();
+        break;
+      default:
+        this.logger.warn(`Unknown command: ${command}. Type "help" for available commands.`);
+      }
+            
+    } catch (error) {
+      this.logger.error('Command execution failed:', error.message);
+    }
+  }
+
+  /**
+     * Handle create node command
+     */
+  async handleCreateNode(params) {
+    if (params.length < 1) {
+      this.logger.error('Usage: create <name> [type] [capabilities]');
+      return;
+    }
+        
+    const name = params[0];
+    const type = params[1] || 'standard';
+    const capabilities = params[2] ? JSON.parse(params[2]) : {};
+        
+    try {
+      const node = await this.meshNetwork.createNode(name, type, capabilities);
+      this.logger.success(`Node '${name}' created successfully`);
+    } catch (error) {
+      this.logger.error('Failed to create node:', error.message);
+    }
+  }
+
+  /**
+     * Handle remove node command
+     */
+  async handleRemoveNode(params) {
+    if (params.length < 1) {
+      this.logger.error('Usage: remove <name>');
+      return;
+    }
+        
+    const name = params[0];
+        
+    try {
+      await this.meshNetwork.removeNode(name);
+      this.logger.success(`Node '${name}' removed successfully`);
+    } catch (error) {
+      this.logger.error('Failed to remove node:', error.message);
+    }
+  }
+
+  /**
+     * Handle list nodes command
+     */
+  async handleListNodes(params) {
+    try {
+      const nodes = Array.from(this.meshNetwork.nodes.values());
+      this.outputNodesTable(nodes, params.includes('--verbose'));
+    } catch (error) {
+      this.logger.error('Failed to list nodes:', error.message);
+    }
+  }
+
+  /**
+     * Handle connect nodes command
+     */
+  async handleConnectNodes(params) {
+    if (params.length < 2) {
+      this.logger.error('Usage: connect <source> <target> [type]');
+      return;
+    }
+        
+    const source = params[0];
+    const target = params[1];
+    const type = params[2] || 'secure';
+        
+    try {
+      const sourceNode = this.meshNetwork.nodes.get(source);
+      const targetNode = this.meshNetwork.nodes.get(target);
+            
+      if (!sourceNode || !targetNode) {
+        this.logger.error('One or both nodes not found');
+        return;
+      }
+            
+      const connection = await this.meshNetwork.establishConnection(sourceNode, targetNode, type);
+      this.logger.success(`Connection established: ${source} <-> ${target}`);
+    } catch (error) {
+      this.logger.error('Failed to establish connection:', error.message);
+    }
+  }
+
+  /**
+     * Handle show topology command
+     */
+  async handleShowTopology(params) {
+    try {
+      const topology = await this.meshNetwork.getNetworkTopology();
+      this.networkVisualizer.outputAsciiFormat(topology);
+    } catch (error) {
+      this.logger.error('Failed to show topology:', error.message);
+    }
+  }
+
+  /**
+     * Handle show stats command
+     */
+  async handleShowStats(params) {
+    try {
+      await this.displayNetworkStats();
+    } catch (error) {
+      this.logger.error('Failed to show stats:', error.message);
+    }
+  }
+
+  /**
+     * Handle search nodes command
+     */
+  async handleSearchNodes(params) {
+    try {
+      const query = {};
+      if (params.length > 0) query.name = params[0];
+            
+      const results = await this.meshNetwork.searchNodes(query);
+      this.outputSearchResults(results);
+    } catch (error) {
+      this.logger.error('Failed to search nodes:', error.message);
+    }
+  }
+
+  /**
+     * Handle send message command
+     */
+  async handleSendMessage(params) {
+    if (params.length < 3) {
+      this.logger.error('Usage: send <source> <target> <message>');
+      return;
+    }
+        
+    const source = params[0];
+    const target = params[1];
+    const message = params.slice(2).join(' ');
+        
+    try {
+      const sourceNode = this.meshNetwork.nodes.get(source);
+      const targetNode = this.meshNetwork.nodes.get(target);
+            
+      if (!sourceNode || !targetNode) {
+        this.logger.error('One or both nodes not found');
+        return;
+      }
+            
+      const messageObj = {
+        type: 'data',
+        content: message,
+        timestamp: new Date().toISOString()
+      };
+            
+      const result = await this.meshNetwork.sendMessage(sourceNode, targetNode, messageObj);
+      this.logger.success(`Message sent successfully (ID: ${result.id})`);
+    } catch (error) {
+      this.logger.error('Failed to send message:', error.message);
+    }
+  }
+
+  /**
+     * Handle simulate attack command
+     */
+  async handleSimulateAttack(params) {
+    if (params.length < 2) {
+      this.logger.error('Usage: attack <type> <target>');
+      return;
+    }
+        
+    const type = params[0];
+    const target = params[1];
+        
+    try {
+      const targetNode = this.meshNetwork.nodes.get(target);
+      if (!targetNode) {
+        this.logger.error(`Target node '${target}' not found`);
+        return;
+      }
+            
+      const result = await this.meshNetwork.simulateAttack(type, targetNode);
+      this.logger.success(`Attack simulation completed: ${type}`);
+      this.logger.info(`Result: ${result.details}`);
+    } catch (error) {
+      this.logger.error('Attack simulation failed:', error.message);
+    }
+  }
+
+  /**
+     * Show interactive help
+     */
+  showInteractiveHelp() {
+    console.log(chalk.blue.bold('\nAvailable Commands:'));
+    console.log(chalk.gray('Node Management:'));
+    console.log('  create <name> [type] [capabilities]  - Create a new node');
+    console.log('  remove <name>                        - Remove a node');
+    console.log('  list [--verbose]                     - List all nodes');
+    console.log('  connect <source> <target> [type]     - Connect two nodes');
+        
+    console.log(chalk.gray('\nNetwork Operations:'));
+    console.log('  topology                             - Show network topology');
+    console.log('  stats                                - Show network statistics');
+    console.log('  search [query]                       - Search for nodes');
+        
+    console.log(chalk.gray('\nCommunication:'));
+    console.log('  send <source> <target> <message>     - Send encrypted message');
+        
+    console.log(chalk.gray('\nSecurity Testing:'));
+    console.log('  attack <type> <target>               - Simulate security attack');
+        
+    console.log(chalk.gray('\nSystem:'));
+    console.log('  clear                                - Clear screen');
+    console.log('  history                              - Show command history');
+    console.log('  help                                 - Show this help');
+    console.log('  exit                                 - Exit interactive mode');
+    console.log('');
+  }
+
+  /**
+     * Show command history
+     */
+  showCommandHistory() {
+    if (this.commandHistory.length === 0) {
+      this.logger.info('No command history');
+      return;
+    }
+        
+    console.log(chalk.blue.bold('\nCommand History:'));
+    this.commandHistory.slice(-10).forEach((cmd, index) => {
+      console.log(chalk.gray(`${this.commandHistory.length - 10 + index + 1}. ${cmd}`));
+    });
+    console.log('');
+  }
+
+  /**
+     * Exit interactive mode
+     */
+  async exitInteractiveMode() {
+    this.logger.info('Exiting interactive mode...');
+    this.isRunning = false;
+        
+    try {
+      await this.meshNetwork.shutdown();
+      this.logger.success('Mesh network shutdown complete');
+    } catch (error) {
+      this.logger.error('Error during shutdown:', error.message);
+    }
+        
+    process.exit(0);
+  }
+
+  /**
+     * Setup auto-completion for commands
+     */
+  setupAutoComplete() {
+    const commands = [
+      'create', 'remove', 'list', 'connect', 'topology', 'stats',
+      'search', 'send', 'attack', 'clear', 'history', 'help', 'exit'
+    ];
+        
+    commands.forEach(cmd => this.autoComplete.add(cmd));
+  }
+
+  /**
+     * Output nodes in table format
+     */
+  outputNodesTable(nodes, verbose = false) {
+    if (verbose) {
+      const data = [
+        ['Name', 'Type', 'ID', 'Created', 'Status', 'Connections']
+      ];
+            
+      nodes.forEach(node => {
+        data.push([
+          node.name,
+          node.type,
+          node.id || 'N/A',
+          node.createdAt ? new Date(node.createdAt).toLocaleDateString() : 'N/A',
+          node.status || 'active',
+          node.connections ? node.connections.length : 0
+        ]);
+      });
+            
+      console.log(table.table(data));
+    } else {
+      const data = [
+        ['Name', 'Type', 'Status', 'Connections']
+      ];
+            
+      nodes.forEach(node => {
+        data.push([
+          node.name,
+          node.type,
+          node.status || 'active',
+          node.connections ? node.connections.length : 0
+        ]);
+      });
+            
+      console.log(table.table(data));
+    }
+  }
+
+  /**
+     * Output search results
+     */
+  outputSearchResults(results) {
+    if (results.length === 0) {
+      this.logger.info('No nodes found matching criteria');
+      return;
+    }
+        
+    const data = [
+      ['Name', 'Type', 'Relevance', 'Status']
+    ];
+        
+    results.forEach(result => {
+      data.push([
+        result.name,
+        result.type,
+        result.relevance ? `${Math.round(result.relevance * 100)}%` : 'N/A',
+        result.status || 'active'
+      ]);
+    });
+        
+    console.log(table.table(data));
+  }
+
+  /**
+     * Display network statistics
+     */
+  async displayNetworkStats() {
+    try {
+      const stats = this.meshNetwork.getNetworkStats();
+            
+      console.log(chalk.blue.bold('\nNetwork Statistics:'));
+      console.log(chalk.gray('General:'));
+      console.log(`  Total Nodes: ${stats.totalNodes}`);
+      console.log(`  Active Connections: ${stats.activeConnections}`);
+      console.log(`  Messages Sent: ${stats.messagesSent}`);
+      console.log(`  Messages Received: ${stats.messagesReceived}`);
+      console.log(`  Encryption Operations: ${stats.encryptionOperations}`);
+            
+      console.log(chalk.gray('\nTopology:'));
+      console.log(`  Total Connections: ${stats.topology.totalConnections}`);
+      console.log(`  Average Connectivity: ${stats.topology.averageConnectivity?.toFixed(2) || 'N/A'}`);
+      console.log(`  Network Diameter: ${stats.topology.networkDiameter || 'N/A'}`);
+            
+      console.log(chalk.gray('\nSecurity:'));
+      console.log(`  Supported Algorithms: ${stats.security.encryptionAlgorithms.join(', ')}`);
+      console.log(`  Active Certificates: ${stats.security.activeCertificates}`);
+      console.log(`  Security Violations: ${stats.security.securityViolations}`);
+      console.log('');
+            
+    } catch (error) {
+      this.logger.error('Failed to display network stats:', error.message);
+    }
+  }
+
+  /**
+     * Start statistics monitor
+     */
+  async startStatsMonitor(interval) {
+    this.logger.info(`Starting stats monitor (refresh every ${interval} seconds)...`);
+        
+    const monitor = setInterval(async () => {
+      console.clear();
+      await this.displayNetworkStats();
+    }, interval * 1000);
+        
+    // Stop monitoring on Ctrl+C
+    process.on('SIGINT', () => {
+      clearInterval(monitor);
+      this.logger.info('Stats monitor stopped');
+      process.exit(0);
+    });
+  }
+
+  /**
+     * Show system information
+     */
+  showSystemInfo() {
+    console.log(chalk.blue.bold('\nSystem Information:'));
+    console.log(`  Node.js Version: ${process.version}`);
+    console.log(`  Platform: ${process.platform}`);
+    console.log(`  Architecture: ${process.arch}`);
+    console.log(`  Memory Usage: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)} MB`);
+    console.log(`  Uptime: ${Math.round(process.uptime())} seconds`);
+    console.log('');
+  }
+
+  /**
+     * Show security status command
+     */
+  showSecurityStatusCommand() {
+    return new Command('status')
+      .description('Show security status and metrics')
+      .action(async () => {
+        try {
+          const status = this.meshNetwork.securityCore.getSecurityStatus();
+          console.log(chalk.blue.bold('\n🔒 Security Status:'));
+          console.log(chalk.gray('─'.repeat(40)));
+          console.log(`${chalk.blue('Initialized:')} ${status.isInitialized ? chalk.green('Yes') : chalk.red('No')}`);
+          console.log(`${chalk.blue('Key Store:')} ${chalk.white(status.keyStoreSize)} keys`);
+          console.log(`${chalk.blue('Certificates:')} ${chalk.white(status.certificateStoreSize)} certificates`);
+          console.log(`${chalk.blue('Trusted Roots:')} ${chalk.white(status.trustedRootsCount)} roots`);
+          console.log(`${chalk.blue('Algorithms:')} ${chalk.white(status.supportedAlgorithms.join(', '))}`);
+        } catch (error) {
+          this.logger.error('Failed to get security status:', error.message);
+        }
+      });
+  }
+
+  /**
+     * Show messages command
+     */
+  showMessagesCommand() {
+    return new Command('list')
+      .description('Show message history and statistics')
+      .action(async () => {
+        try {
+          console.log(chalk.blue.bold('\n📨 Message History:'));
+          console.log(chalk.gray('─'.repeat(40)));
+          console.log(chalk.yellow('Message history feature coming soon...'));
+        } catch (error) {
+          this.logger.error('Failed to show messages:', error.message);
+        }
+      });
+  }
+
+  /**
+     * Start simulation command
+     */
+  startSimulationCommand() {
+    return new Command('start')
+      .description('Start network simulation')
+      .option('-s, --speed <speed>', 'Simulation speed (slow, normal, fast)', 'normal')
+      .action(async (options) => {
+        try {
+          console.log(chalk.blue.bold('\n🚀 Starting Network Simulation:'));
+          console.log(chalk.gray('─'.repeat(40)));
+                    
+          if (this.meshNetwork.simulator) {
+            this.meshNetwork.simulator.setSimulationSpeed(options.speed);
+            await this.meshNetwork.simulator.initialize();
+            console.log(chalk.green('Simulation started successfully'));
+          } else {
+            console.log(chalk.yellow('Simulation module not available'));
+          }
+        } catch (error) {
+          this.logger.error('Failed to start simulation:', error.message);
+        }
+      });
+  }
+
+  /**
+     * Stop simulation command
+     */
+  stopSimulationCommand() {
+    return new Command('stop')
+      .description('Stop network simulation')
+      .action(async () => {
+        try {
+          console.log(chalk.blue.bold('\n🛑 Stopping Network Simulation:'));
+          console.log(chalk.gray('─'.repeat(40)));
+                    
+          if (this.meshNetwork.simulator) {
+            await this.meshNetwork.simulator.shutdown();
+            console.log(chalk.green('Simulation stopped successfully'));
+          } else {
+            console.log(chalk.yellow('No active simulation to stop'));
+          }
+        } catch (error) {
+          this.logger.error('Failed to stop simulation:', error.message);
+        }
+      });
+  }
+
+  /**
+     * Load scenario command
+     */
+  loadScenarioCommand() {
+    return new Command('load')
+      .description('Load simulation scenario')
+      .argument('<scenario>', 'Scenario name or file path')
+      .action(async (scenario) => {
+        try {
+          console.log(chalk.blue.bold('\n📋 Loading Simulation Scenario:'));
+          console.log(chalk.gray('─'.repeat(40)));
+          console.log(`${chalk.blue('Scenario:')} ${chalk.white(scenario)}`);
+          console.log(chalk.yellow('Scenario loading feature coming soon...'));
+        } catch (error) {
+          this.logger.error('Failed to load scenario:', error.message);
+        }
+      });
+  }
+
+  /**
+     * Show detailed help
+     */
+  showDetailedHelp() {
+    this.program.help();
+  }
+}

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Home</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Home</h1>
+
+    
+
+
+
+    
+
+
+    <h3> </h3>
+
+
+
+
+
+
+
+
+
+
+    
+
+
+
+
+    <section>
+        <article><h1>Secure Mesh CLI - Offline Security Research Platform</h1>
+<blockquote>
+<p><strong>Professional Security Research Tool</strong> - Simulate and analyze secure mesh network communications in a controlled, offline environment.</p>
+</blockquote>
+<h2>🚀 Overview</h2>
+<p>Secure Mesh CLI is an enterprise-grade security research platform that simulates mesh network communications with full cryptographic security. Designed for security professionals, penetration testers, and researchers to understand, test, and demonstrate secure communication protocols in isolated environments.</p>
+<h2>🎯 Use Cases</h2>
+<ul>
+<li><strong>Security Research</strong>: Analyze mesh network vulnerabilities and attack vectors</li>
+<li><strong>Penetration Testing</strong>: Practice and demonstrate security testing methodologies</li>
+<li><strong>Security Training</strong>: Educate teams on secure communication protocols</li>
+<li><strong>Compliance Testing</strong>: Validate security requirements in controlled environments</li>
+<li><strong>Threat Modeling</strong>: Simulate and analyze various attack scenarios</li>
+</ul>
+<h2>🔒 Security Features</h2>
+<ul>
+<li><strong>End-to-End Encryption</strong>: AES-256-GCM with perfect forward secrecy</li>
+<li><strong>Certificate-Based Authentication</strong>: X.509 certificate validation and management</li>
+<li><strong>Secure Key Exchange</strong>: ECDH key agreement with curve25519</li>
+<li><strong>Message Integrity</strong>: HMAC-SHA256 and digital signatures</li>
+<li><strong>Replay Protection</strong>: Timestamp-based and nonce validation</li>
+<li><strong>Trust Networks</strong>: Web-of-trust implementation for node validation</li>
+<li><strong>Secure Discovery</strong>: Protected node search and discovery protocols</li>
+</ul>
+<h2>🏗️ Architecture</h2>
+<pre class="prettyprint source"><code>┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   CLI Interface │    │  Mesh Network   │    │  Security Core  │
+│                 │    │   Simulation    │    │                 │
+├─────────────────┤    ├─────────────────┤    ├─────────────────┤
+│ • Command Parser│    │ • Node Manager  │    │ • Crypto Engine │
+│ • Interactive   │    │ • Message Router│    │ • Key Management│
+│ • Output Format │    │ • Topology      │    │ • Certificate   │
+│ • Help System   │    │   Visualization │    │   Validation    │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+</code></pre>
+<h2>🚀 Quick Start</h2>
+<pre class="prettyprint source lang-bash"><code># Install dependencies
+npm install
+
+# Start the CLI
+npm start
+
+# Development mode with auto-reload
+npm run dev
+
+# Run security tests
+npm test
+
+# Generate documentation
+npm run docs:generate
+</code></pre>
+<h2>📚 Documentation</h2>
+<ul>
+<li><a href="./docs/SECURITY.md">Security Architecture</a></li>
+<li><a href="./docs/API.md">API Reference</a></li>
+<li><a href="./docs/ATTACKS.md">Attack Scenarios</a></li>
+<li><a href="./docs/BEST_PRACTICES.md">Best Practices</a></li>
+</ul>
+<h2>🔧 Configuration</h2>
+<p>The system can be configured through environment variables or configuration files:</p>
+<pre class="prettyprint source lang-bash"><code># Security settings
+export MESH_ENCRYPTION_LEVEL=256
+export MESH_CERT_VALIDATION=true
+export MESH_TRUST_REQUIREMENT=high
+
+# Simulation settings
+export MESH_MAX_NODES=100
+export MESH_SIMULATION_SPEED=realtime
+</code></pre>
+<h2>🧪 Testing</h2>
+<p>Comprehensive test suite covering:</p>
+<ul>
+<li>Cryptographic operations</li>
+<li>Network protocols</li>
+<li>Attack scenarios</li>
+<li>Security validations</li>
+<li>Performance benchmarks</li>
+</ul>
+<pre class="prettyprint source lang-bash"><code># Run all tests
+npm test
+
+# Run with coverage
+npm run test:coverage
+
+# Run specific test suites
+npm test -- --testNamePattern=&quot;crypto&quot;
+</code></pre>
+<h2>🛡️ Security Considerations</h2>
+<p>This tool is designed for <strong>research and testing purposes only</strong>. All cryptographic implementations follow industry best practices and are suitable for educational and research environments.</p>
+<h2>📈 Performance</h2>
+<ul>
+<li><strong>Node Capacity</strong>: Up to 1000 simulated nodes</li>
+<li><strong>Message Throughput</strong>: 10,000+ messages/second</li>
+<li><strong>Encryption Overhead</strong>: &lt;5ms per message</li>
+<li><strong>Memory Usage</strong>: &lt;100MB for 100 nodes</li>
+</ul>
+<h2>🤝 Contributing</h2>
+<p>This project welcomes security researchers and developers. Please read our <a href="./CONTRIBUTING.md">Contributing Guidelines</a> and <a href="./SECURITY.md">Security Policy</a>.</p>
+<h2>📄 License</h2>
+<p>MIT License - see <a href="./LICENSE">LICENSE</a> for details.</p>
+<h2>👨‍💻 Author</h2>
+<p><strong>Benjamin Morin</strong> - Security Researcher &amp; Consultant</p>
+<ul>
+<li><strong>Rate</strong>: $150-200/hour</li>
+<li><strong>Expertise</strong>: Saved clients $1B+ in security incidents</li>
+<li><strong>Specialization</strong>: Enterprise security architecture, penetration testing, security research</li>
+</ul>
+<hr>
+<p><em>Built with enterprise-grade security practices for professional security research and demonstration.</em></p></article>
+    </section>
+
+
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#deepClone">deepClone</a></li><li><a href="global.html#formatBytes">formatBytes</a></li><li><a href="global.html#generateRandomString">generateRandomString</a></li><li><a href="global.html#initializeApplication">initializeApplication</a></li><li><a href="global.html#isValidEmail">isValidEmail</a></li><li><a href="global.html#main">main</a></li><li><a href="global.html#setupGracefulShutdown">setupGracefulShutdown</a></li><li><a href="global.html#sleep">sleep</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.4</a> on Sat Aug 23 2025 00:16:37 GMT+0200 (Central European Summer Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>
